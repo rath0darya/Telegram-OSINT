@@ -16,6 +16,9 @@ This project collects and preserves **publicly accessible Telegram information**
 - Evidence records with timestamps and SHA-256 hashes
 - JSON and human-readable reports
 - Configurable rate limiting and request timeout
+- Real local analysis: top terms, hashtags, mentions, activity-by-day and engagement
+- Related public username extraction from collected evidence
+- CSV evidence export for spreadsheets
 - Offline-friendly report inspection
 - No RaaSHub/RaaSHub-AI dependency
 
@@ -35,7 +38,8 @@ Run:
 ```bash
 ./tg-osint @telegram
 ./tg-osint https://t.me/telegram --json
-./tg-osint @telegram --messages 20
+./tg-osint @telegram --messages 100 --csv
+./tg-osint @telegram --messages 200 --json
 ```
 
 ### Optional Telegram API access
