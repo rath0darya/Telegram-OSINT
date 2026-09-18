@@ -13,4 +13,4 @@ class CoreTests(unittest.TestCase):
         self.assertIn('8.8.8.8', x['ipv4'])
 
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main()\n\nclass AnalyzerTests(unittest.TestCase):\n    def test_analysis(self):\n        from tg_osint.analyzer import analyze_evidence\n        from tg_osint.core import Evidence\n        e=Evidence("telegram_public_message","https://t.me/x/1","2026-01-01T00:00:00+00:00","m","hello #cti @sample_user https://example.com","x",{"date":"2026-01-01T00:00:00+00:00","views":10,"forwards":2})\n        a=analyze_evidence([e]);self.assertEqual(a["message_count"],1);self.assertIn("@sample_user",a["mentions"]);self.assertEqual(a["engagement"]["total_views"],10)\n
