@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "telegram-osint"
-version = "0.1.0"
-description = "Public-information Telegram OSINT toolkit for Termux"
+version = "0.2.0"
+description = "Termux-native Telegram public-information OSINT toolkit"
 requires-python = ">=3.10"
 
 [project.scripts]
