@@ -73,6 +73,9 @@ class CaseDB:
     def add_evidence(self, case_id: int, ev: Evidence) -> None:
         self.db.execute("INSERT INTO evidence(case_id,source_type,source_url,collected_at,title,text,sha256,metadata_json) VALUES(?,?,?,?,?,?,?,?)", (case_id, ev.source_type, ev.source_url, ev.collected_at, ev.title, ev.text, ev.sha256, json.dumps(ev.metadata, sort_keys=True)))
         self.db.commit()
+    def search_evidence(self, case_id: int, query: str) -> list[tuple]:
+        q=f"%{query.lower()}%"
+        return self.db.execute("SELECT source_type,source_url,collected_at,title,text,sha256 FROM evidence WHERE case_id=? AND lower(text) LIKE ? ORDER BY collected_at DESC",(case_id,q)).fetchall()
     def close(self):
         self.db.close()
 
