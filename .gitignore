@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+*.session
+*.session-journal
+reports/*
+!reports/.gitkeep
+cases/*
+!cases/.gitkeep
+*.db
+*.sqlite
