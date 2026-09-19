@@ -35,7 +35,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
         text = str(data)
         out.append(Evidence(
             source_type="telegram_api_public_entity",
-            source_url=f"https://t.me/{username}",
+            source_url=f"https://t.me/{username}" if getattr(entity, "username", None) else f"telegram://id/{getattr(entity, "id", target)}",
             collected_at=now_iso(),
             title=data.get("title") or data.get("username"),
             text=text,
@@ -58,7 +58,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                 raw = str(payload)
                 out.append(Evidence(
                     source_type="telegram_public_message",
-                    source_url=f"https://t.me/{username}/{msg.id}",
+                    source_url=f"https://t.me/{username}/{msg.id}" if getattr(entity, "username", None) else f"telegram://id/{getattr(entity, "id", target)}/{msg.id}",
                     collected_at=now_iso(),
                     title=f"Public message {msg.id}",
                     text=body[:20000],
