@@ -235,8 +235,35 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
 
         history_errors = []
 
+        private_history_seen = 0
+        private_conversation_evidence = False
+
         async def collect_history():
+            nonlocal private_history_seen, private_conversation_evidence
             async for msg in client.iter_messages(entity, limit=limit):
+                private_history_seen += 1
+                # The peer itself was resolved by exact Telegram ID. This
+                # records an observed 1-to-1 conversation without pretending
+                # that messages sent by the authenticated account were authored
+                # by the target.
+                if not private_conversation_evidence:
+                    peer_payload = {
+                        "peer": data,
+                        "target_telegram_id": int(entity_id),
+                        "observed_via": "telegram_exact_resolved_peer",
+                        "history_messages_observed": private_history_seen,
+                    }
+                    peer_text = str(peer_payload)
+                    out.append(Evidence(
+                        "telegram_private_conversation",
+                        f"https://t.me/{public_username}" if public_username else f"telegram://id/{entity_id}",
+                        now_iso(),
+                        f"1-to-1 conversation history observed for Telegram ID {entity_id}",
+                        peer_text,
+                        sha256_text(peer_text),
+                        peer_payload,
+                    ))
+                    private_conversation_evidence = True
                 await collect_one(msg, target_author_only=True)
 
         global_author_seen = 0
@@ -415,6 +442,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                     chat_entity = await client.get_input_entity(chat)
                     chat_data = _chat_data(chat)
                     local_seen = 0
+                    local_matches = 0
 
                     # Search each discovered public group/channel directly by
                     # the authoritative target ID. This is much narrower than
@@ -446,6 +474,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                             await collect_one(msg, search_context=False, target_author_only=True)
                             if len(out) > before:
                                 chat_scan_matches += 1
+                                local_matches += 1
                             if local_seen >= per_chat_limit:
                                 break
                         if local_seen >= per_chat_limit or len(messages) < min(per_chat_limit, 100):
@@ -488,7 +517,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                             except Exception:
                                 pass
 
-                    if verified_membership or chat_scan_matches > 0:
+                    if verified_membership or local_matches > 0:
                         membership_observations += 1
                         membership_payload = {
                             "membership": {
