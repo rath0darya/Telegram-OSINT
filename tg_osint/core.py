@@ -34,6 +34,9 @@ def sha256_text(text: str) -> str:
 
 def normalize_target(target: str) -> dict:
     raw = target.strip()
+    if re.fullmatch(r"-?\d{5,20}", raw):
+        telegram_id = int(raw)
+        return {"target_type": "telegram_id", "telegram_id": telegram_id, "username": None, "handle": str(telegram_id), "url": None}
     if raw.startswith("@"):
         username = raw[1:]
     elif raw.startswith(("http://", "https://")):
@@ -48,7 +51,7 @@ def normalize_target(target: str) -> dict:
         username = raw.lstrip("@")
     if not re.fullmatch(r"[A-Za-z0-9_]{5,32}", username):
         raise ValueError("Target must be a Telegram public username (5-32 letters/numbers/underscore).")
-    return {"username": username, "handle": f"@{username}", "url": f"https://t.me/{username}"}
+    return {"target_type": "username", "telegram_id": None, "username": username, "handle": f"@{username}", "url": f"https://t.me/{username}"}
 
 def extract_iocs(text: str) -> dict:
     return {
@@ -65,13 +68,14 @@ class CaseDB:
         self.db = sqlite3.connect(path)
         self.db.execute("""CREATE TABLE IF NOT EXISTS cases(id INTEGER PRIMARY KEY, target TEXT NOT NULL, created_at TEXT NOT NULL, report_path TEXT, notes TEXT DEFAULT '')""")
         self.db.execute("""CREATE TABLE IF NOT EXISTS evidence(id INTEGER PRIMARY KEY, case_id INTEGER NOT NULL, source_type TEXT, source_url TEXT, collected_at TEXT, title TEXT, text TEXT, sha256 TEXT, metadata_json TEXT, FOREIGN KEY(case_id) REFERENCES cases(id))""")
+        self.db.execute("CREATE INDEX IF NOT EXISTS idx_evidence_case_sha ON evidence(case_id, sha256)")
         self.db.commit()
     def create_case(self, target: str) -> int:
         cur = self.db.execute("INSERT INTO cases(target,created_at) VALUES(?,?)", (target, now_iso()))
         self.db.commit()
         return int(cur.lastrowid)
     def add_evidence(self, case_id: int, ev: Evidence) -> None:
-        self.db.execute("INSERT INTO evidence(case_id,source_type,source_url,collected_at,title,text,sha256,metadata_json) VALUES(?,?,?,?,?,?,?,?)", (case_id, ev.source_type, ev.source_url, ev.collected_at, ev.title, ev.text, ev.sha256, json.dumps(ev.metadata, sort_keys=True)))
+        self.db.execute("INSERT OR IGNORE INTO evidence(case_id,source_type,source_url,collected_at,title,text,sha256,metadata_json) SELECT ?,?,?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM evidence WHERE case_id=? AND sha256=?)", (case_id, ev.source_type, ev.source_url, ev.collected_at, ev.title, ev.text, ev.sha256, json.dumps(ev.metadata, sort_keys=True), case_id, ev.sha256))
         self.db.commit()
     def search_evidence(self, case_id: int, query: str) -> list[tuple]:
         q=f"%{query.lower()}%"
