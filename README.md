@@ -13,6 +13,10 @@ This project collects and preserves **publicly accessible Telegram information**
 - Optional Telethon integration for public entity metadata and public messages
 - Extract links, usernames, emails, domains and common IOCs from public text
 - Local SQLite case database
+- Persistent historical intelligence database for public observations
+- Entity, chat, message, identifier and observation tables
+- Incremental first/last-observed history across collection runs
+- Local historical username/name search
 - Evidence records with timestamps and SHA-256 hashes
 - Responsive HTML reports (the only report format)
 - Configurable rate limiting and request timeout
@@ -40,6 +44,7 @@ Run:
 ./tg-osint https://t.me/telegram
 ./tg-osint @telegram --messages 100
 ./tg-osint @telegram --messages 200
+./tg-osint --search telegram
 ```
 
 ### Optional Telegram API access
@@ -57,7 +62,7 @@ Then:
 ./tg-osint @publicchannel --messages 20
 ```
 
-The optional API collector is deliberately limited to public entity metadata and public messages.
+The optional API collector is deliberately limited to public entity metadata and public messages. Each run also feeds `cases/intelligence.db`, the project's historical search/index layer.
 
 ## Output
 
