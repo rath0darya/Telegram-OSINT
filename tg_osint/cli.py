@@ -16,7 +16,7 @@ def main():
     p.add_argument("--db",default="cases/telegram_osint.db"); p.add_argument("--out",default="reports")
     p.add_argument("--no-analysis",action="store_true")
     p.add_argument("--intel-db",default="cases/intelligence.db",help="Persistent historical public-observation database")
-    p.add_argument("--search",default="",help="Search previously observed public entities by username/name")
+    p.add_argument("--search",default="",help="Search previously observed public entities by username/name/Telegram ID")
     a=p.parse_args(); load_dotenv()
     if a.search:
         intel=IntelligenceDB(a.intel_db)
@@ -33,13 +33,19 @@ def main():
     if a.messages:
         try:
             from .telegram_api import collect_public
-            ev.extend(collect_public(t["telegram_id"] if t["target_type"] == "telegram_id" else t["username"],a.messages))
+            api_target=t["telegram_id"] if t["target_type"] == "telegram_id" else t["username"]
+            ev.extend(collect_public(api_target,a.messages))
         except Exception as e: errors.append(f"telegram api: {type(e).__name__}: {e}")
     for x in ev: db.add_evidence(cid,x)
     intel.ingest(ev); intel.finish_run(run_id,len(ev))
     analysis={} if a.no_analysis else analyze_evidence(ev)
     report=build_report(t,cid,ev,errors,analysis); hp=str(Path(a.out)/f"{t['handle'].replace('-', 'neg-')}_{cid}.html"); write_html(report,hp); intel.close(); db.close()
+    collection=next((x.metadata.get("collection",{}) for x in ev if x.source_type=="telegram_api_public_entity"),{})
     print(f"Target      : {t['handle']}"); print(f"Evidence    : {len(ev)}"); print(f"Messages    : {analysis.get('message_count',0)}"); print(f"Case ID     : {cid}"); print(f"HTML report : {hp}")
+    if collection:
+        print(f"API messages: requested={collection.get('messages_requested',0)} seen={collection.get('messages_seen',0)} with_text={collection.get('messages_with_text',0)}")
+        if collection.get("messages_requested",0) and collection.get("messages_with_text",0)==0:
+            print("API note    : Telegram returned no text-bearing public messages for this target.")
     if analysis.get("related_public_usernames"): print("Related public usernames:",", ".join(analysis["related_public_usernames"][:20]))
     if errors:
         print("\nWarnings:")
