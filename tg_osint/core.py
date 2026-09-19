@@ -63,23 +63,66 @@ def extract_iocs(text: str) -> dict:
     }
 
 class CaseDB:
-    def __init__(self, path: str):
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(path)
-        self.db.execute("""CREATE TABLE IF NOT EXISTS cases(id INTEGER PRIMARY KEY, target TEXT NOT NULL, created_at TEXT NOT NULL, report_path TEXT, notes TEXT DEFAULT '')""")
-        self.db.execute("""CREATE TABLE IF NOT EXISTS evidence(id INTEGER PRIMARY KEY, case_id INTEGER NOT NULL, source_type TEXT, source_url TEXT, collected_at TEXT, title TEXT, text TEXT, sha256 TEXT, metadata_json TEXT, FOREIGN KEY(case_id) REFERENCES cases(id))""")
-        self.db.execute("CREATE INDEX IF NOT EXISTS idx_evidence_case_sha ON evidence(case_id, sha256)")
+    """MariaDB-backed case/evidence store."""
+
+    def __init__(self, database: str = "telegram_osint"):
+        from .mysql import connect
+        self.db = connect()
+        with self.db.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS cases (
+                    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                    target VARCHAR(255) NOT NULL,
+                    created_at VARCHAR(64) NOT NULL,
+                    report_path TEXT,
+                    notes TEXT
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS evidence (
+                    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                    case_id BIGINT UNSIGNED NOT NULL,
+                    source_type VARCHAR(128),
+                    source_url TEXT,
+                    collected_at VARCHAR(64),
+                    title TEXT,
+                    text LONGTEXT,
+                    sha256 CHAR(64),
+                    metadata_json LONGTEXT,
+                    UNIQUE KEY uq_case_evidence_sha (case_id, sha256),
+                    CONSTRAINT fk_case_evidence FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """)
         self.db.commit()
+
     def create_case(self, target: str) -> int:
-        cur = self.db.execute("INSERT INTO cases(target,created_at) VALUES(?,?)", (target, now_iso()))
-        self.db.commit()
-        return int(cur.lastrowid)
+        with self.db.cursor() as cur:
+            cur.execute("INSERT INTO cases(target,created_at) VALUES(%s,%s)", (target, now_iso()))
+            return int(cur.lastrowid)
+
     def add_evidence(self, case_id: int, ev: Evidence) -> None:
-        self.db.execute("INSERT OR IGNORE INTO evidence(case_id,source_type,source_url,collected_at,title,text,sha256,metadata_json) SELECT ?,?,?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM evidence WHERE case_id=? AND sha256=?)", (case_id, ev.source_type, ev.source_url, ev.collected_at, ev.title, ev.text, ev.sha256, json.dumps(ev.metadata, sort_keys=True), case_id, ev.sha256))
+        with self.db.cursor() as cur:
+            cur.execute(
+                "INSERT IGNORE INTO evidence(case_id,source_type,source_url,collected_at,title,text,sha256,metadata_json) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)",
+                (case_id, ev.source_type, ev.source_url, ev.collected_at, ev.title, ev.text, ev.sha256,
+                 json.dumps(ev.metadata, sort_keys=True)),
+            )
         self.db.commit()
+
     def search_evidence(self, case_id: int, query: str) -> list[tuple]:
-        q=f"%{query.lower()}%"
-        return self.db.execute("SELECT source_type,source_url,collected_at,title,text,sha256 FROM evidence WHERE case_id=? AND lower(text) LIKE ? ORDER BY collected_at DESC",(case_id,q)).fetchall()
+        q = f"%{query.lower()}%"
+        with self.db.cursor() as cur:
+            cur.execute(
+                "SELECT source_type,source_url,collected_at,title,text,sha256 FROM evidence "
+                "WHERE case_id=%s AND LOWER(text) LIKE %s ORDER BY collected_at DESC",
+                (case_id, q),
+            )
+            rows = cur.fetchall()
+        return [
+            (r["source_type"], r["source_url"], r["collected_at"], r["title"], r["text"], r["sha256"])
+            for r in rows
+        ]
+
     def close(self):
         self.db.close()
 
