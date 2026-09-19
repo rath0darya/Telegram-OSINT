@@ -245,12 +245,14 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
 
         async def collect_global_author_messages():
             nonlocal global_author_seen
-            # Telethon's global iterator requires a non-empty search query.
-            # Calling iter_messages(None, from_user=...) without search makes
-            # it build a global request around InputPeerEmpty and can fail with
-            # "InputPeerEmpty() does not have any entity type".  Use the target's
-            # currently resolved public username/display name only as a search
-            # accelerator; exact authorship is still enforced by numeric ID below.
+            # Telegram exposes sender filtering through messages.search,
+            # whose InputPeerEmpty peer covers all private chats and normal groups.
+            # Telethon's iter_messages(None, from_user=...) historically routes
+            # this path through an InputPeerEmpty entity and may fail while trying
+            # to resolve that empty peer. Use the raw MTProto request instead.
+            # This is deliberately separate from messages.searchGlobal: Telegram's
+            # global-search constructor has no from_id field, so it cannot perform
+            # a server-side author filter across public channels.
             queries = []
             if public_username:
                 queries.extend([public_username, f"@{public_username}"])
@@ -263,23 +265,31 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
             total = 0
             for query in queries:
                 try:
-                    # Do not pass from_user to the global search request. In
-                    # some Telethon/Telegram combinations that makes the
-                    # global request try to serialize InputPeerEmpty. The
-                    # query is only an index accelerator; collect_one() still
-                    # enforces the exact numeric sender ID, so a username/name
-                    # hit can never become target evidence by itself.
-                    async for msg in client.iter_messages(
-                        None,
-                        search=query,
-                        limit=min(limit, 3000),
-                    ):
+                    # Use messages.search(peer=inputPeerEmpty, from_id=...)
+                    # directly. Telegram documents InputPeerEmpty here as the
+                    # scope for all private chats and normal groups; channels
+                    # require per-channel searches/scans instead.
+                    result = await client(functions.messages.SearchRequest(
+                        peer=types.InputPeerEmpty(),
+                        q=query,
+                        from_id=target_input,
+                        filter=types.InputMessagesFilterEmpty(),
+                        min_date=None,
+                        max_date=None,
+                        offset_id=0,
+                        add_offset=0,
+                        limit=min(limit, 100),
+                        max_id=0,
+                        min_id=0,
+                        hash=0,
+                    ))
+                    for msg in getattr(result, "messages", None) or []:
                         total += 1
                         global_author_seen += 1
                         await collect_one(msg, search_context=False, target_author_only=True)
                 except Exception as exc:
                     raise RuntimeError(
-                        f"ID-based global search failed for Telegram ID {entity_id} "
+                        f"ID-based accessible-chat author search failed for Telegram ID {entity_id} "
                         f"with query {query!r}: {type(exc).__name__}: {exc}"
                     ) from exc
             return total
