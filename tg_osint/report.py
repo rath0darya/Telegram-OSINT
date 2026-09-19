@@ -19,7 +19,7 @@ def build_report(target, case_id, evidence, errors, analysis=None, intel=None):
     )
     history = intel.entity_history(int(resolved_id)) if intel is not None and resolved_id is not None else {}
     return {
-        "schema_version": "1.6.0",
+        "schema_version": "1.7.0",
         "tool": "Telegram-OSINT",
         "generated_at": now_iso(),
         "case_id": case_id,
@@ -179,7 +179,7 @@ h1{{font-size:clamp(2rem,5vw,3rem);line-height:1.05;margin:.2em 0 .35em;letter-s
 <div class="card wide"><h2>Groups &amp; channels observed</h2><div class="table-wrap"><table><tr><th>Observed (IST)</th><th>Chat</th><th>Username</th><th>Type</th><th>Status</th><th>Role</th></tr>{_table(membership_rows,["observed","chat","username","type","status","role"],"No membership observations collected.")}</table></div></div>
 </section>
 
-<section class="card"><h2>Collection coverage</h2><div class="grid"><div><span class="muted">History seen</span><br><strong>{collection.get("history_seen",0)}</strong></div><div><span class="muted">Search references seen</span><br><strong>{collection.get("search_seen",0)}</strong></div><div><span class="muted">Search references with text</span><br><strong>{collection.get("search_with_text",0)}</strong></div><div><span class="muted">Reaction records</span><br><strong>{len(reactions)}</strong></div></div><p class="muted">History/search collection is retried up to three times. A failed stage is reported separately from a successful identity/profile observation. Search results are reference observations; they do not prove that the target authored those messages. Collection errors are surfaced rather than silently discarded.</p></section>
+<section class="card"><h2>Collection coverage</h2><div class="grid"><div><span class="muted">History seen</span><br><strong>{collection.get("history_seen",0)}</strong></div><div><span class="muted">Search references seen</span><br><strong>{collection.get("search_seen",0)}</strong></div><div><span class="muted">Search references with text</span><br><strong>{collection.get("search_with_text",0)}</strong></div><div><span class="muted">Reaction records</span><br><strong>{len(reactions)}</strong></div><div><span class="muted">Discovered public chats</span><br><strong>{collection.get("discovered_chat_count",0)}</strong></div><div><span class="muted">Chat scan messages</span><br><strong>{collection.get("chat_scan_seen",0)}</strong></div><div><span class="muted">Target-author matches</span><br><strong>{collection.get("chat_scan_matches",0)}</strong></div></div><p class="muted">History/search collection is retried up to three times. A failed stage is reported separately from a successful identity/profile observation. Search results are reference observations; they do not prove that the target authored those messages. Collection errors are surfaced rather than silently discarded.</p></section>
 
 <section id="relationships" class="card"><h2>Observed relationships</h2><p class="muted">Relations come from explicit Telegram message metadata or public mentions; ambiguous text is not treated as identity proof.</p>
 <div class="table-wrap"><table><tr><th>Observed (IST)</th><th>Relation</th><th>Telegram ID</th><th>Username</th><th>Source</th></tr>{_table(relation_rows,["observed","relation","id","username","source"],"No relationships observed.")}</table></div></section>
@@ -190,6 +190,6 @@ h1{{font-size:clamp(2rem,5vw,3rem);line-height:1.05;margin:.2em 0 .35em;letter-s
 
 <section id="evidence"><h2>Collection evidence</h2>{"".join(evidence_cards) or '<div class="card muted">No evidence was collected.</div>'}</section>
 {f'<section><div class="card warn"><h2>Collection warnings</h2><ul>{warnings}</ul></div></section>' if warnings else ""}
-<footer class="muted">Report schema 1.6.0 · Stored timestamps remain machine-readable; report timestamps are displayed in IST (UTC+05:30) · public-information-only collection · historical completeness is not guaranteed.</footer>
+<footer class="muted">Report schema 1.7.0 · Stored timestamps remain machine-readable; report timestamps are displayed in IST (UTC+05:30) · public-information-only collection · historical completeness is not guaranteed.</footer>
 </main></body></html>"""
     p.write_text(doc, encoding="utf-8")
