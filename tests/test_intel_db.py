@@ -18,6 +18,8 @@ class IntelligenceDBTests(unittest.TestCase):
             history = db.entity_history(123)
             self.assertEqual([x["value"] for x in history["identifiers"] if x["identifier_type"] == "telegram_username"], ["old_name", "new_name"])
             self.assertEqual(len(history["profiles"]), 2)
+            self.assertEqual(db.resolve_identifier("telegram_username", "old_name"), 123)
+            self.assertEqual(db.resolve_identifier("telegram_username", "new_name"), 123)
             db.close()
 
     def test_message_author_and_mention_relationship(self):
