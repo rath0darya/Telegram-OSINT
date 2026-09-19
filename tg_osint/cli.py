@@ -77,6 +77,11 @@ def main():
         try:
             from .telegram_api import collect_public
             api_target = t["telegram_id"] if t["target_type"] == "telegram_id" else t["username"]
+            if t["target_type"] == "username":
+                historical_id = intel.resolve_identifier("telegram_username", t["username"])
+                if historical_id is not None:
+                    api_target = historical_id
+                    print(f"Historical username resolved to Telegram ID: {historical_id}")
             ev.extend(collect_public(api_target, a.messages))
         except Exception as e:
             errors.append(f"telegram api: {type(e).__name__}: {e}")
@@ -113,7 +118,7 @@ def main():
             print(f"History warning: {history_error}")
         for search_error in collection.get("search_errors", []):
             print(f"Search warning: {search_error}")
-        print(f"Resolved ID : {collection.get('resolved_telegram_id')}")
+        print(f"Resolved ID : {collection.get('resolved_telegram_id')}")\n        print("Identity rule: exact Telegram ID match only; username/name/text matches remain contextual.")
     if not ev and not errors:
         errors.append("No evidence was produced; Telegram entity resolution did not return data.")
     if errors:
