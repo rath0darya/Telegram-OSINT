@@ -42,6 +42,21 @@ def _message_author_matches_target(msg: Any, target_id: int) -> bool:
         return False
 
 
+
+
+def _target_input_peer(entity: Any, target_id: int, types: Any) -> Any:
+    """Build a concrete InputPeerUser from the resolved User entity."""
+    access_hash = getattr(entity, "access_hash", None)
+    if access_hash is not None:
+        return types.InputPeerUser(user_id=int(target_id), access_hash=int(access_hash))
+    candidate = getattr(entity, "input_entity", None)
+    if candidate is not None and isinstance(candidate, types.InputPeerUser):
+        return candidate
+    raise RuntimeError(
+        f"Telegram ID {target_id} resolved without a usable user access_hash; "
+        "the authenticated session must encounter the public user entity first."
+    )
+
 def _chat_data(entity: Any) -> dict:
     kind = type(entity).__name__.lower()
     if "channel" in kind:
@@ -73,6 +88,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
         public_username = getattr(entity, "username", None)
         data = _entity_data(entity)
         data["resolved_from"] = str(target)
+        data["target_input_peer_ready"] = bool(getattr(entity, "access_hash", None) is not None)
 
         seen = 0
         with_text = 0
@@ -220,7 +236,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
             # ID-centric search: once Telegram has resolved the target entity,
             # use its InputPeerUser rather than username/name text. This keeps
             # historical username changes attached to the same numeric ID.
-            target_input = await client.get_input_entity(entity)
+            target_input = _target_input_peer(entity, int(entity_id), types)
             try:
                 local_seen = 0
                 async for msg in client.iter_messages(
@@ -444,7 +460,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
 
         source = f"https://t.me/{public_username}" if public_username else f"telegram://id/{entity_id}"
         entity_text = str(data)
-        out.insert(0, Evidence("telegram_api_public_entity", source, now_iso(), data.get("title") or data.get("display_name") or public_username or str(entity_id), entity_text, sha256_text(entity_text), {"entity": data, "collection": {"messages_requested": max(0, limit), "messages_seen": seen, "messages_with_text": with_text, "history_seen": seen - search_seen, "history_with_text": with_text - search_with_text, "search_seen": search_seen, "search_with_text": search_with_text, "search_errors": search_errors, "history_errors": history_errors, "global_author_seen": global_author_seen, "global_author_errors": global_author_errors, "global_reference_seen": global_reference_seen, "discovered_chat_count": len(discovered_chats), "chat_scan_seen": chat_scan_seen, "chat_scan_matches": chat_scan_matches, "membership_observations": membership_observations, "accessible_public_dialogs": accessible_public_dialogs, "id_dialog_scan_errors": id_dialog_scan_errors, "discovery_errors": discovery_errors, "resolved_telegram_id": entity_id, "identity_collection_mode": "telegram_numeric_id_first", "message_collection_rule": "exact_target_author_telegram_id_only"}, "iocs": extract_iocs(entity_text)}))
+        out.insert(0, Evidence("telegram_api_public_entity", source, now_iso(), data.get("title") or data.get("display_name") or public_username or str(entity_id), entity_text, sha256_text(entity_text), {"entity": data, "collection": {"messages_requested": max(0, limit), "messages_seen": seen, "messages_with_text": with_text, "history_seen": seen - search_seen, "history_with_text": with_text - search_with_text, "search_seen": search_seen, "search_with_text": search_with_text, "search_errors": search_errors, "history_errors": history_errors, "global_author_seen": global_author_seen, "global_author_errors": global_author_errors, "global_reference_seen": global_reference_seen, "discovered_chat_count": len(discovered_chats), "chat_scan_seen": chat_scan_seen, "chat_scan_matches": chat_scan_matches, "membership_observations": membership_observations, "accessible_public_dialogs": accessible_public_dialogs, "id_dialog_scan_errors": id_dialog_scan_errors, "discovery_errors": discovery_errors, "resolved_telegram_id": entity_id, "identity_collection_mode": "telegram_numeric_id_first", "message_collection_rule": "exact_target_author_telegram_id_only", "target_input_peer": "InputPeerUser_with_access_hash"}, "iocs": extract_iocs(entity_text)}))
     finally:
         await client.disconnect()
     return out
