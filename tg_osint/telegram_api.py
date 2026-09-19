@@ -376,26 +376,10 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                     return
                 seen_chat_ids.add(chat_id)
                 discovered_chats.append(item)
-                chat_data = _chat_data(item)
-                payload = {
-                    "chat": chat_data,
-                    "query": query,
-                    "discovery_method": discovery_method,
-                    "target_telegram_id": int(entity_id),
-                    "target_username": public_username,
-                    "association_verified": False,
-                }
-                text_value = str(payload)
-                out.append(Evidence(
-                    "telegram_public_chat_discovery",
-                    f"https://t.me/{chat_data.get('username')}" if chat_data.get("username")
-                    else f"telegram://chat/{chat_data.get('id')}",
-                    now_iso(),
-                    f"Discovered public {chat_data.get('type') or 'chat'}: {chat_data.get('title') or chat_data.get('username') or chat_data.get('id')}",
-                    text_value,
-                    sha256_text(text_value),
-                    payload,
-                ))
+                # Discovery is only an internal candidate list. Never emit
+                # a group/channel merely because its title, username, or a
+                # searched text resembles the target. A chat becomes report
+                # evidence only after exact Telegram-ID verification below.
 
             for query in dict.fromkeys(q for q in queries if q):
                 try:
@@ -467,23 +451,55 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                         if local_seen >= per_chat_limit or len(messages) < min(per_chat_limit, 100):
                             break
 
-                    # Membership/role is a separate observation. It is never
-                    # inferred merely from a discovered chat or message.
+                    # Membership/role is a separate exact-ID check. It is
+                    # never inferred from a similar username, title, or search hit.
+                    verified_membership = False
+                    role = None
+                    status = None
                     try:
                         permissions = await client.get_permissions(chat_entity, entity)
-                        role = "member"
+                        verified_membership = bool(getattr(permissions, "is_member", False))
                         if getattr(permissions, "is_creator", False):
                             role = "creator"
                         elif getattr(permissions, "is_admin", False):
                             role = "admin"
-                        status = "current_member" if getattr(permissions, "is_member", True) else "not_current_member"
+                        elif verified_membership:
+                            role = "member"
+                        status = "current_member" if verified_membership else "not_current_member"
+                    except Exception:
+                        # For channels/supergroups, ask Telegram directly for
+                        # this exact user as a participant. This is an identity
+                        # check, not a username/title search.
+                        if isinstance(chat, types.Channel):
+                            try:
+                                participant = await client(functions.channels.GetParticipantRequest(
+                                    channel=chat_entity,
+                                    participant=target_input,
+                                ))
+                                p = getattr(participant, "participant", None)
+                                if p is not None:
+                                    verified_membership = True
+                                    role = "member"
+                                    if isinstance(p, types.ChannelParticipantCreator):
+                                        role = "creator"
+                                    elif isinstance(p, types.ChannelParticipantAdmin):
+                                        role = "admin"
+                                    status = "current_member"
+                            except Exception:
+                                pass
+
+                    if verified_membership or chat_scan_matches > 0:
                         membership_observations += 1
                         membership_payload = {
                             "membership": {
                                 "chat": chat_data,
-                                "status": status,
-                                "role": role,
-                                "observed_via": "telegram_permissions",
+                                "status": status or "historical_message_author",
+                                "role": role or "member",
+                                "observed_via": (
+                                    "telegram_permissions" if verified_membership
+                                    else "telegram_exact_author_id"
+                                ),
+                                "target_telegram_id": target_id,
                             },
                             "entity": data,
                         }
@@ -492,13 +508,11 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                             "telegram_public_membership",
                             f"https://t.me/{chat_data.get('username')}" if chat_data.get("username") else f"telegram://chat/{chat_data.get('id')}",
                             now_iso(),
-                            f"Membership observation for {chat_data.get('title') or chat_data.get('username') or chat_data.get('id')}",
+                            f"Verified target association: {chat_data.get('title') or chat_data.get('username') or chat_data.get('id')}",
                             membership_text,
                             sha256_text(membership_text),
                             membership_payload,
                         ))
-                    except Exception:
-                        pass
                 except Exception as exc:
                     discovery_errors.append(
                         f"chat {getattr(chat, 'id', None)}: {type(exc).__name__}: {exc}"
