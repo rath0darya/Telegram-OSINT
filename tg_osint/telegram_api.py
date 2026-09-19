@@ -242,6 +242,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
         global_author_seen = 0
         global_author_errors = []
         global_reference_seen = 0
+        target_input = await client.get_input_entity(entity)
 
         async def collect_global_author_messages():
             nonlocal global_author_seen
