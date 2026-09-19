@@ -213,6 +213,16 @@ h1{{font-size:clamp(2rem,5vw,3rem);line-height:1.05;margin:.2em 0 .35em;letter-s
 
 </section>
 
+<section id="summary" class="card"><h2>Executive summary</h2>
+<p><strong>Target:</strong> {_e(report["target"]["handle"])} · <strong>Resolved Telegram ID:</strong> {_e(resolved_display)}</p>
+<div class="grid">
+<div><span class="muted">Identity observations</span><br><strong>{len(profiles)}</strong></div>
+<div><span class="muted">Username observations</span><br><strong>{len(usernames)}</strong></div>
+<div><span class="muted">Membership observations</span><br><strong>{len(memberships)}</strong></div>
+<div><span class="muted">Relationship observations</span><br><strong>{len(relationships)}</strong></div>
+</div>
+<p class="muted">This report summarizes only evidence collected by Telegram-OSINT in the selected case. Exact Telegram numeric ID matching is used for authorship attribution. Public names, usernames, message text, and contextual mentions are not treated as identity proof on their own.</p></section>
+
 <section id="history" class="card"><h2>Username &amp; profile history</h2>
 <p class="muted">Only observations collected by this tool are shown. This is not a complete lifetime history.</p>
 <div class="table-wrap"><table><tr><th>Observed (IST)</th><th>Username</th><th>Name</th><th>About</th></tr>{_table(profile_rows,["observed_at","username","name","about"],"No profile snapshots collected.")}</table></div>
@@ -247,6 +257,13 @@ h1{{font-size:clamp(2rem,5vw,3rem);line-height:1.05;margin:.2em 0 .35em;letter-s
 <section id="evidence"><div class="section-head"><div><h2>Collection evidence</h2><p class="muted">Every stored message is shown individually. Authorship requires an exact Telegram numeric ID match.</p></div><div class="evidence-tools"><input id="evidenceSearch" type="search" placeholder="Filter evidence..."><button type="button" id="openEvidence">Open all</button><button type="button" id="closeEvidence">Close all</button></div></div>{"".join(evidence_cards) or '<div class="card muted">No evidence was collected.</div>'}</section>
 {f'<section><div class="card warn"><h2>Collection warnings</h2><ul>{warnings}</ul></div></section>' if warnings else ""}
 {f'<section><div class="card warn"><h2>Collector diagnostics</h2><ul>{"".join(f"<li>{_e(x)}</li>" for x in collection_warnings)}</ul></div></section>' if collection_warnings else ""}
+<section class="card"><h2>Technical appendix</h2>
+<div class="meta"><span>Report schema</span><code>1.9.0</code></div>
+<div class="meta"><span>Collection scope</span><strong>{_e(report.get("collection_scope"))}</strong></div>
+<div class="meta"><span>Display timezone</span><strong>Asia/Kolkata (IST, UTC+05:30)</strong></div>
+<div class="meta"><span>Evidence records</span><strong>{report["evidence_count"]}</strong></div>
+<div class="meta"><span>Analysis keys</span><code>{_e(", ".join(sorted(a.keys())))}</code></div>
+<p class="muted">Evidence is embedded directly into this generated HTML. No external report database, benchmark relationship file, remote JavaScript bundle, stylesheet, API, or external reference-data service is required to render this document.</p></section>
 <footer class="muted">Report schema 1.9.0 · Stored timestamps remain machine-readable; report timestamps are displayed in IST (UTC+05:30) · public-information-only collection · historical completeness is not guaranteed.</footer>
 </main><script>const q=document.getElementById("evidenceSearch");const cards=[...document.querySelectorAll(".evidence")];q?.addEventListener("input",()=>{{const term=q.value.trim().toLowerCase();cards.forEach(x=>x.hidden=term&&!x.innerText.toLowerCase().includes(term));}});document.getElementById("openEvidence")?.addEventListener("click",()=>cards.forEach(x=>x.open=true));document.getElementById("closeEvidence")?.addEventListener("click",()=>cards.forEach(x=>x.open=false));</script></body></html>"""
     p.write_text(doc, encoding="utf-8")
