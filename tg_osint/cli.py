@@ -27,12 +27,13 @@ def main():
     except ValueError as e:p.error(str(e))
     if a.messages<0:p.error("--messages must be >= 0")
     Path(a.out).mkdir(parents=True,exist_ok=True); db=CaseDB(a.db); intel=IntelligenceDB(a.intel_db); run_id=intel.start_run(t["handle"]); cid=db.create_case(t["handle"]); ev=[]; errors=[]
-    try: ev.append(fetch_public_page(t["url"],a.timeout,a.rate))
-    except Exception as e: errors.append(f"public page: {type(e).__name__}: {e}")
+    if t["url"]:
+        try: ev.append(fetch_public_page(t["url"],a.timeout,a.rate))
+        except Exception as e: errors.append(f"public page: {type(e).__name__}: {e}")
     if a.messages:
         try:
             from .telegram_api import collect_public
-            ev.extend(collect_public(t["username"],a.messages))
+            ev.extend(collect_public(t["telegram_id"] if t["target_type"] == "telegram_id" else t["username"],a.messages))
         except Exception as e: errors.append(f"telegram api: {type(e).__name__}: {e}")
     for x in ev: db.add_evidence(cid,x)
     intel.ingest(ev); intel.finish_run(run_id,len(ev))
