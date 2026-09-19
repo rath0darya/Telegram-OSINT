@@ -103,6 +103,9 @@ def main():
         print(f"History: seen={collection.get('history_seen', 0)} with_text={collection.get('history_with_text', 0)}")
         print(f"Global author search: seen={collection.get('global_author_seen', 0)}")
         print(f"Public search: seen={collection.get('global_reference_seen', collection.get('search_seen', 0))} with_text={collection.get('search_with_text', 0)}")
+        print(f"Discovered public chats: {collection.get('discovered_chat_count', 0)}")
+        print(f"Chat scan: seen={collection.get('chat_scan_seen', 0)} target-author-matches={collection.get('chat_scan_matches', 0)}")
+        print(f"Membership observations: {collection.get('membership_observations', 0)}")
         for author_error in collection.get("global_author_errors", []):
             print(f"Global author search warning: {author_error}")
         for history_error in collection.get("history_errors", []):
