@@ -63,10 +63,12 @@ def main():
         p.error("--messages must be >= 0")
 
     manual_relationships = []
+    manual_relationship_target_id = None
     if a.manual_relationships:
         try:
             payload = json.loads(Path(a.manual_relationships).read_text(encoding="utf-8"))
             expected_id = payload.get("target_telegram_id")
+            manual_relationship_target_id = int(expected_id) if expected_id is not None else None
             manual_relationships = payload.get("relationships", [])
             if not isinstance(manual_relationships, list):
                 raise ValueError("relationships must be a list")
@@ -114,6 +116,8 @@ def main():
     intel.ingest(ev)
     intel.finish_run(run_id, len(ev))
     resolved_id = next(((x.metadata or {}).get("entity", {}).get("id") for x in ev if x.source_type == "telegram_api_public_entity" and isinstance((x.metadata or {}).get("entity"), dict)), None)
+    if manual_relationships and manual_relationship_target_id is not None and resolved_id is not None and int(resolved_id) != manual_relationship_target_id:
+        p.error(f"manual relationship target ID {manual_relationship_target_id} does not match resolved Telegram ID {resolved_id}")
     analysis = {} if a.no_analysis else analyze_evidence(ev, int(resolved_id) if resolved_id is not None else None)
     report = build_report(t, cid, ev, errors, analysis, intel=intel, manual_relationships=manual_relationships)
     hp = str(Path(a.out) / f"{t['handle'].replace('-', 'neg-')}_{cid}.html")
