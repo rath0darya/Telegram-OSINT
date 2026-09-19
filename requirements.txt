@@ -2,4 +2,4 @@ requests>=2.31,<3
 beautifulsoup4>=4.12,<5
 python-dotenv>=1.0,<2
 # Optional API collector:
-telethon>=1.36,<2
+telethon>=1.45,<2
