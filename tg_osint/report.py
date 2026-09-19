@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import html
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 from .core import now_iso
 
-DISPLAY_TZ = ZoneInfo("Asia/Kolkata")
+DISPLAY_TZ = timezone(timedelta(hours=5, minutes=30), name="IST")
 DISPLAY_TZ_LABEL = "IST"
 
 
@@ -20,14 +19,14 @@ def build_report(target, case_id, evidence, errors, analysis=None, intel=None):
     )
     history = intel.entity_history(int(resolved_id)) if intel is not None and resolved_id is not None else {}
     return {
-        "schema_version": "1.5.0",
+        "schema_version": "1.5.1",
         "tool": "Telegram-OSINT",
         "generated_at": now_iso(),
         "case_id": case_id,
         "target": target,
         "resolved_telegram_id": resolved_id,
         "collection_scope": "public_information_only",
-        "display_timezone": "Asia/Kolkata",
+        "display_timezone": "UTC+05:30",
         "display_timezone_label": DISPLAY_TZ_LABEL,
         "evidence_count": len(evidence),
         "errors": errors,
@@ -45,7 +44,6 @@ def _e(v):
     if v is None:
         return ""
     value = str(v)
-    # Human-readable timestamps are displayed in IST while stored timestamps remain UTC/ISO.
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
         if parsed.tzinfo is not None and "T" in value:
@@ -156,7 +154,7 @@ h1{{font-size:clamp(2rem,5vw,3rem);line-height:1.05;margin:.2em 0 .35em;letter-s
 <div class="badge">Telegram ID: {_e(resolved)}</div>
 <div class="badge">{_e("@" + current_username if current_username else "No current public username")}</div>
 <div class="badge">{_e(current_name or "No current display name")}</div>
-<p class="muted">Generated {_e(report["generated_at"])} · Display timezone: Asia/Kolkata (IST) · Case #{_e(report["case_id"])}</p>
+<p class="muted">Generated {_e(report["generated_at"])} · Display timezone: Asia/Kolkata (IST, UTC+05:30) · Case #{_e(report["case_id"])}</p>
 <nav class="nav"><a href="#identity">Identity</a><a href="#history">History</a><a href="#activity">Activity</a><a href="#relationships">Relationships</a><a href="#indicators">Indicators</a><a href="#evidence">Evidence</a></nav></header>
 
 <section id="identity" class="grid">
@@ -186,6 +184,6 @@ h1{{font-size:clamp(2rem,5vw,3rem);line-height:1.05;margin:.2em 0 .35em;letter-s
 
 <section id="evidence"><h2>Collection evidence</h2>{"".join(evidence_cards) or '<div class="card muted">No evidence was collected.</div>'}</section>
 {f'<section><div class="card warn"><h2>Collection warnings</h2><ul>{warnings}</ul></div></section>' if warnings else ""}
-<footer class="muted">Report schema 1.5.0 · Stored timestamps remain machine-readable; report timestamps are displayed in IST (Asia/Kolkata) · public-information-only collection · historical completeness is not guaranteed.</footer>
+<footer class="muted">Report schema 1.5.1 · Stored timestamps remain machine-readable; report timestamps are displayed in IST (UTC+05:30) · public-information-only collection · historical completeness is not guaranteed.</footer>
 </main></body></html>"""
     p.write_text(doc, encoding="utf-8")
