@@ -178,7 +178,6 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                 "forward_from": forward_from,
                 "mentions": mentions,
                 "search_context": search_context,
-                "resolved_target_id": entity_id,
             }
             out.append(
                 Evidence(
