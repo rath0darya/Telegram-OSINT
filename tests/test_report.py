@@ -35,6 +35,43 @@ class ReportTests(unittest.TestCase):
             self.assertIn("Example", text)
             self.assertIn("https://t.me/example/1", text)
 
+    def test_evidence_mapping_uses_exact_author_id(self):
+        from tg_osint.core import Evidence
+
+        evidence = [
+            Evidence(
+                "telegram_api_public_entity",
+                "telegram://id/7030758596",
+                "2026-09-19T00:00:00+00:00",
+                "Teacher Sara",
+                "entity",
+                "entitysha",
+                {"entity": {"id": 7030758596, "username": "Teachersara0", "display_name": "Teacher Sara"}},
+            ),
+            Evidence(
+                "telegram_public_message",
+                "https://t.me/example/1",
+                "2026-09-19T00:00:00+00:00",
+                "Unrelated",
+                "unrelated https://other.example",
+                "msgsha",
+                {"message_id": 1, "chat": {"id": -1}, "author": {"id": 2229980862}},
+            ),
+        ]
+        report = build_report(
+            {"handle": "@Teachersara0", "username": "Teachersara0", "target_type": "username", "url": "https://t.me/Teachersara0"},
+            2,
+            evidence,
+            [],
+            analysis={},
+        )
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "report.html"
+            write_html(report, path)
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("NO — context only; different/unknown author ID", text)
+            self.assertNotIn("resolved_target_id", text)
+
 
 if __name__ == "__main__":
     unittest.main()
