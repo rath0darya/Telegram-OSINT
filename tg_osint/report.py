@@ -10,7 +10,7 @@ DISPLAY_TZ = timezone(timedelta(hours=5, minutes=30), name="IST")
 DISPLAY_TZ_LABEL = "IST"
 
 
-def build_report(target, case_id, evidence, errors, analysis=None, intel=None, manual_relationships=None):
+def build_report(target, case_id, evidence, errors, analysis=None, intel=None):
     resolved_id = next(
         ((e.metadata or {}).get("entity", {}).get("id") for e in evidence
          if isinstance((e.metadata or {}).get("entity"), dict)
@@ -32,7 +32,6 @@ def build_report(target, case_id, evidence, errors, analysis=None, intel=None, m
         "errors": errors,
         "analysis": analysis or {},
         "history": history,
-        "manual_relationships": manual_relationships or [],
         "evidence": [
             {"source_type": e.source_type, "source_url": e.source_url, "collected_at": e.collected_at,
              "title": e.title, "text": e.text, "sha256": e.sha256, "metadata": e.metadata}
@@ -76,7 +75,6 @@ def write_html(report, path):
     memberships = history.get("memberships", [])
     messages = history.get("messages", [])
     relationships = history.get("relationships", [])
-    manual_relationships = report.get("manual_relationships", [])
     reactions = history.get("reactions", [])
     iocs = a.get("iocs", {})
     context_iocs = a.get("reference_iocs", {})
@@ -212,7 +210,7 @@ h1{{font-size:clamp(2rem,5vw,3rem);line-height:1.05;margin:.2em 0 .35em;letter-s
 <div class="card stat"><span class="muted">Target-authored chats</span><strong>{a.get("chat_count",0)}</strong></div>
 <div class="card stat"><span class="muted">Context-observed chats</span><strong>{a.get("all_observed_chat_count",0)}</strong></div>
 <div class="card stat"><span class="muted">Observed relationships</span><strong>{len(relationships)}</strong></div>
-<div class="card stat"><span class="muted">Manual report references</span><strong>{len(manual_relationships)}</strong></div>
+
 </section>
 
 <section id="history" class="card"><h2>Username &amp; profile history</h2>
@@ -238,11 +236,6 @@ h1{{font-size:clamp(2rem,5vw,3rem);line-height:1.05;margin:.2em 0 .35em;letter-s
 <div><span class="muted">Author-ID mismatches</span><br><strong>{a.get("author_mismatch_count",0)}</strong></div>
 </div><p class="muted">Target-authored counts use exact Telegram ID equality. Context/reference counts include messages collected around the target but not proven to be authored by the target. Counts are observations available to the authenticated Telegram session. A zero means no observation was collected in the accessible scope; it is not proof that the underlying event never happened.</p></section>
 
-<section class="card"><h2>Manual relationship references — this report only</h2>
-<p class="muted">These rows were manually imported from the supplied benchmark HTML for Telegram ID {_e(resolved)}. They are external reference data, not inferred by this collector, and are not written into the persistent intelligence database.</p>
-<div class="table-wrap"><table><tr><th>Observed date</th><th>Relation</th><th>Person</th><th>Telegram ID</th><th>Username</th><th>Reaction</th><th>Source</th></tr>
-{_table(manual_relationships,["observed","relation","person","telegram_id","username","reaction","source"],"No manual relationship references supplied.")}</table></div></section>
-
 <section id="relationships" class="card"><h2>Observed relationships</h2><p class="muted">Relations come from explicit Telegram message metadata or public mentions; ambiguous text is not treated as identity proof.</p>
 <div class="table-wrap"><table><tr><th>Observed (IST)</th><th>Relation</th><th>Telegram ID</th><th>Username</th><th>Source</th></tr>{_table(relation_rows,["observed","relation","id","username","source"],"No relationships observed.")}</table></div></section>
 
@@ -254,6 +247,6 @@ h1{{font-size:clamp(2rem,5vw,3rem);line-height:1.05;margin:.2em 0 .35em;letter-s
 <section id="evidence"><div class="section-head"><div><h2>Collection evidence</h2><p class="muted">Every stored message is shown individually. Authorship requires an exact Telegram numeric ID match.</p></div><div class="evidence-tools"><input id="evidenceSearch" type="search" placeholder="Filter evidence..."><button type="button" id="openEvidence">Open all</button><button type="button" id="closeEvidence">Close all</button></div></div>{"".join(evidence_cards) or '<div class="card muted">No evidence was collected.</div>'}</section>
 {f'<section><div class="card warn"><h2>Collection warnings</h2><ul>{warnings}</ul></div></section>' if warnings else ""}
 {f'<section><div class="card warn"><h2>Collector diagnostics</h2><ul>{"".join(f"<li>{_e(x)}</li>" for x in collection_warnings)}</ul></div></section>' if collection_warnings else ""}
-<footer class="muted">Report schema 1.8.0 · Stored timestamps remain machine-readable; report timestamps are displayed in IST (UTC+05:30) · public-information-only collection · historical completeness is not guaranteed.</footer>
+<footer class="muted">Report schema 1.9.0 · Stored timestamps remain machine-readable; report timestamps are displayed in IST (UTC+05:30) · public-information-only collection · historical completeness is not guaranteed.</footer>
 </main><script>const q=document.getElementById("evidenceSearch");const cards=[...document.querySelectorAll(".evidence")];q?.addEventListener("input",()=>{{const term=q.value.trim().toLowerCase();cards.forEach(x=>x.hidden=term&&!x.innerText.toLowerCase().includes(term));}});document.getElementById("openEvidence")?.addEventListener("click",()=>cards.forEach(x=>x.open=true));document.getElementById("closeEvidence")?.addEventListener("click",()=>cards.forEach(x=>x.open=false));</script></body></html>"""
     p.write_text(doc, encoding="utf-8")
