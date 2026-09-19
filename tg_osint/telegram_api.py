@@ -436,6 +436,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                     # the authoritative target ID. This is much narrower than
                     # downloading the entire chat history and works for channels
                     # as well as groups when Telegram exposes sender filtering.
+                    offset_id = 0
                     for page in range(30):
                         result = await client(functions.messages.SearchRequest(
                             peer=chat_entity,
@@ -444,7 +445,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                             filter=types.InputMessagesFilterEmpty(),
                             min_date=None,
                             max_date=None,
-                            offset_id=0 if page == 0 else getattr(locals().get("result"), "messages", [None])[-1].id if getattr(locals().get("result"), "messages", None) else 0,
+                            offset_id=offset_id,
                             add_offset=0,
                             limit=min(per_chat_limit, 100),
                             max_id=0,
