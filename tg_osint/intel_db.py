@@ -38,7 +38,13 @@ class IntelligenceDB:
         self.db.executescript(SCHEMA)
         self._migrate()
         self.db.executescript("""CREATE INDEX IF NOT EXISTS idx_messages_author ON messages(author_entity_id);""")
+        self._ensure_column("identifiers", "observation_count", "INTEGER NOT NULL DEFAULT 1")
         self.db.commit()
+
+    def _ensure_column(self, table: str, column: str, ddl: str):
+        cols = {r["name"] for r in self.db.execute(f"PRAGMA table_info({table})")}
+        if column not in cols:
+            self.db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
     def _migrate(self):
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(messages)")}
