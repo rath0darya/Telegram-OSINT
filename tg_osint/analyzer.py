@@ -22,7 +22,7 @@ def analyze_evidence(evidence: list) -> dict:
     return {"message_count":len(messages),"iocs":iocs,
       "top_words":[{"value":k,"count":v} for k,v in words.most_common(30)],
       "hashtags":[{"value":k,"count":v} for k,v in hashtags.most_common(30)],
-      "mentions":[{"value":k,"count":v} for k,v in mentions.most_common(30)],
+      "mentions":sorted(set(iocs["usernames"])),
       "activity_by_day":dict(sorted(dates.items())),
       "engagement":{"messages_with_views":len(views),"total_views":sum(views),"average_views":round(sum(views)/len(views),2) if views else 0,"max_views":max(views) if views else 0,"total_forwards":sum(forwards),"average_forwards":round(sum(forwards)/len(forwards),2) if forwards else 0},
       "related_public_usernames":sorted(set(iocs["usernames"]))}
