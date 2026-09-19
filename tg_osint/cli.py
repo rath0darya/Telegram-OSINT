@@ -137,7 +137,9 @@ def main():
         print(f"Global author search: seen={collection.get('global_author_seen', 0)}")
         print(f"Public search: seen={collection.get('global_reference_seen', collection.get('search_seen', 0))} with_text={collection.get('search_with_text', 0)}")
         print(f"Discovered public chats: {collection.get('discovered_chat_count', 0)}")
-        print(f"Chat scan: seen={collection.get('chat_scan_seen', 0)} target-author-matches={collection.get('chat_scan_matches', 0)}")
+        print(f"Accessible public dialogs scanned by ID: {collection.get('accessible_public_dialogs', 0)}")
+        print(f"ID-based dialog scan: seen={collection.get('chat_scan_seen', 0)} target-author-matches={collection.get('chat_scan_matches', 0)}")
+        print(f"Chat discovery scan: discovered={collection.get('discovered_chat_count', 0)}")
         print(f"Membership observations: {collection.get('membership_observations', 0)}")
         for author_error in collection.get("global_author_errors", []):
             print(f"Global author search warning: {author_error}")
@@ -146,7 +148,8 @@ def main():
         for search_error in collection.get("search_errors", []):
             print(f"Search warning: {search_error}")
         print(f"Resolved ID : {collection.get('resolved_telegram_id')}")
-        print("Identity rule: exact Telegram ID match only; username/name/text matches remain contextual.")
+        print("Identity rule: numeric Telegram ID is authoritative; username/name/text are identifiers/context only.")
+        print(f"Collection mode: {collection.get('identity_collection_mode', 'telegram_numeric_id_first')}")
     if not ev and not errors:
         errors.append("No evidence was produced; Telegram entity resolution did not return data.")
     if errors:
