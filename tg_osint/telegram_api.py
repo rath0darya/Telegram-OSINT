@@ -219,7 +219,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                         local_seen += 1
                         global_author_seen += 1
                         await collect_one(msg, search_context=False)
-                    if local_seen or index < len(candidates) - 1:
+                    if local_seen:
                         return
                 except Exception as exc:
                     last_error = exc
