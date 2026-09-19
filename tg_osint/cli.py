@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -24,6 +25,7 @@ def main():
     p.add_argument("--intel-db", default="cases/intelligence.db")
     p.add_argument("--search", default="", help="Search historical public entities")
     p.add_argument("--history", type=int, default=None, help="Show stored history for a Telegram numeric ID")
+    p.add_argument("--manual-relationships", default="", help="Import report-only relationship references from a JSON file; never stored in intelligence DB")
     a = p.parse_args()
     load_dotenv()
 
@@ -60,6 +62,27 @@ def main():
     if a.messages < 0:
         p.error("--messages must be >= 0")
 
+    manual_relationships = []
+    if a.manual_relationships:
+        try:
+            payload = json.loads(Path(a.manual_relationships).read_text(encoding="utf-8"))
+            expected_id = payload.get("target_telegram_id")
+            manual_relationships = payload.get("relationships", [])
+            if not isinstance(manual_relationships, list):
+                raise ValueError("relationships must be a list")
+            if expected_id is not None:
+                expected_id = int(expected_id)
+                if expected_id <= 0:
+                    raise ValueError("target_telegram_id must be positive")
+            for row in manual_relationships:
+                if not isinstance(row, dict):
+                    raise ValueError("each relationship must be an object")
+                row_id = row.get("target_telegram_id", expected_id)
+                if expected_id is not None and row_id is not None and int(row_id) != expected_id:
+                    raise ValueError("manual relationship target ID mismatch")
+        except Exception as e:
+            p.error(f"invalid --manual-relationships file: {type(e).__name__}: {e}")
+
     Path(a.out).mkdir(parents=True, exist_ok=True)
     db = CaseDB(a.db)
     run_id = intel.start_run(t["handle"])
@@ -92,7 +115,7 @@ def main():
     intel.finish_run(run_id, len(ev))
     resolved_id = next(((x.metadata or {}).get("entity", {}).get("id") for x in ev if x.source_type == "telegram_api_public_entity" and isinstance((x.metadata or {}).get("entity"), dict)), None)
     analysis = {} if a.no_analysis else analyze_evidence(ev, int(resolved_id) if resolved_id is not None else None)
-    report = build_report(t, cid, ev, errors, analysis, intel=intel)
+    report = build_report(t, cid, ev, errors, analysis, intel=intel, manual_relationships=manual_relationships)
     hp = str(Path(a.out) / f"{t['handle'].replace('-', 'neg-')}_{cid}.html")
     write_html(report, hp)
     intel.close()
