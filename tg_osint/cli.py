@@ -38,7 +38,7 @@ def main():
     for x in ev: db.add_evidence(cid,x)
     intel.ingest(ev); intel.finish_run(run_id,len(ev))
     analysis={} if a.no_analysis else analyze_evidence(ev)
-    report=build_report(t,cid,ev,errors,analysis); hp=str(Path(a.out)/f"{t['username']}_{cid}.html"); write_html(report,hp); intel.close(); db.close()
+    report=build_report(t,cid,ev,errors,analysis); hp=str(Path(a.out)/f"{t['handle'].replace('-', 'neg-')}_{cid}.html"); write_html(report,hp); intel.close(); db.close()
     print(f"Target      : {t['handle']}"); print(f"Evidence    : {len(ev)}"); print(f"Messages    : {analysis.get('message_count',0)}"); print(f"Case ID     : {cid}"); print(f"HTML report : {hp}")
     if analysis.get("related_public_usernames"): print("Related public usernames:",", ".join(analysis["related_public_usernames"][:20]))
     if errors:
