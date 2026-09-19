@@ -359,63 +359,115 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
             display_name = data.get("display_name")
             if display_name:
                 queries.append(display_name)
-            seen_chat_ids = set()
+            seen_chat_ids = {getattr(x, "id", None) for x in discovered_chats}
+
+            async def add_chat(item, query, discovery_method):
+                if not isinstance(item, (types.Channel, types.Chat)):
+                    return
+                chat_id = getattr(item, "id", None)
+                if chat_id is None or chat_id in seen_chat_ids:
+                    return
+                # Only retain public/searchable chats. For channels this means a
+                # username or an access hash; ordinary groups have no username
+                # but can still be returned by Telegram search.
+                if isinstance(item, types.Channel) and not (
+                    getattr(item, "username", None) or getattr(item, "access_hash", None)
+                ):
+                    return
+                seen_chat_ids.add(chat_id)
+                discovered_chats.append(item)
+                chat_data = _chat_data(item)
+                payload = {
+                    "chat": chat_data,
+                    "query": query,
+                    "discovery_method": discovery_method,
+                    "target_telegram_id": int(entity_id),
+                    "target_username": public_username,
+                    "association_verified": False,
+                }
+                text_value = str(payload)
+                out.append(Evidence(
+                    "telegram_public_chat_discovery",
+                    f"https://t.me/{chat_data.get('username')}" if chat_data.get("username")
+                    else f"telegram://chat/{chat_data.get('id')}",
+                    now_iso(),
+                    f"Discovered public {chat_data.get('type') or 'chat'}: {chat_data.get('title') or chat_data.get('username') or chat_data.get('id')}",
+                    text_value,
+                    sha256_text(text_value),
+                    payload,
+                ))
+
             for query in dict.fromkeys(q for q in queries if q):
                 try:
-                    result = await client(functions.contacts.SearchRequest(
-                        q=query,
-                        limit=100,
-                    ))
-                    for item in list(getattr(result, "chats", None) or []) + list(getattr(result, "users", None) or []):
-                        if isinstance(item, types.Channel):
-                            if getattr(item, "username", None) or getattr(item, "access_hash", None):
-                                chat_id = getattr(item, "id", None)
-                                if chat_id not in seen_chat_ids:
-                                    seen_chat_ids.add(chat_id)
-                                    discovered_chats.append(item)
-                        elif isinstance(item, types.Chat):
-                            chat_id = getattr(item, "id", None)
-                            if chat_id not in seen_chat_ids:
-                                seen_chat_ids.add(chat_id)
-                                discovered_chats.append(item)
+                    result = await client(functions.contacts.SearchRequest(q=query, limit=100))
+                    for item in list(getattr(result, "chats", None) or []):
+                        await add_chat(item, query, "contacts.search")
                 except Exception as exc:
-                    discovery_errors.append(f"{query}: {type(exc).__name__}: {exc}")
+                    discovery_errors.append(f"contacts.search {query}: {type(exc).__name__}: {exc}")
+
+                # Telegram's global message search exposes public groups/channels
+                # that contact search can miss. We use it for DISCOVERY only;
+                # no message from this path becomes target evidence unless its
+                # sender ID exactly matches the resolved target.
+                try:
+                    async for msg in client.iter_messages(
+                        None, search=query, limit=min(limit, 3000)
+                    ):
+                        try:
+                            chat = await msg.get_chat()
+                        except Exception:
+                            chat = None
+                        if chat is not None:
+                            await add_chat(chat, query, "messages.global_search")
+                except Exception as exc:
+                    discovery_errors.append(f"messages.global_search {query}: {type(exc).__name__}: {exc}")
 
         async def scan_discovered_chats():
             nonlocal chat_scan_seen, chat_scan_matches, membership_observations
-            remaining = max(0, limit)
             target_id = int(entity_id)
+            per_chat_limit = min(limit, 3000)
             for chat in discovered_chats:
-                if remaining <= 0:
-                    break
                 try:
-                    # Resolve the chat before iteration so Telegram has the
-                    # correct input peer/access hash.
                     chat_entity = await client.get_input_entity(chat)
                     chat_data = _chat_data(chat)
-                    scanned_here = 0
-                    async for msg in client.iter_messages(chat_entity, limit=remaining):
-                        scanned_here += 1
-                        before = len(out)
-                        await collect_one(msg, search_context=False, target_author_only=True)
-                        chat_scan_seen += 1
-                        remaining -= 1
-                        # Count only newly stored messages whose sender is the
-                        # resolved target. The final author ID is checked below.
-                        if len(out) > before:
-                            body = msg.message or ""
-                            try:
-                                sender = await msg.get_sender()
-                                if getattr(sender, "id", None) == target_id:
-                                    chat_scan_matches += 1
-                            except Exception:
-                                pass
-                        if remaining <= 0:
+                    local_seen = 0
+
+                    # Search each discovered public group/channel directly by
+                    # the authoritative target ID. This is much narrower than
+                    # downloading the entire chat history and works for channels
+                    # as well as groups when Telegram exposes sender filtering.
+                    for page in range(30):
+                        result = await client(functions.messages.SearchRequest(
+                            peer=chat_entity,
+                            q="",
+                            from_id=target_input,
+                            filter=types.InputMessagesFilterEmpty(),
+                            min_date=None,
+                            max_date=None,
+                            offset_id=0 if page == 0 else getattr(locals().get("result"), "messages", [None])[-1].id if getattr(locals().get("result"), "messages", None) else 0,
+                            add_offset=0,
+                            limit=min(per_chat_limit, 100),
+                            max_id=0,
+                            min_id=0,
+                            hash=0,
+                        ))
+                        messages = getattr(result, "messages", None) or []
+                        if not messages:
+                            break
+                        for msg in messages:
+                            local_seen += 1
+                            chat_scan_seen += 1
+                            before = len(out)
+                            await collect_one(msg, search_context=False, target_author_only=True)
+                            if len(out) > before:
+                                chat_scan_matches += 1
+                            if local_seen >= per_chat_limit:
+                                break
+                        if local_seen >= per_chat_limit or len(messages) < min(per_chat_limit, 100):
                             break
 
-                    # Record a membership/role observation when Telegram exposes
-                    # it through the authenticated account. This does not infer
-                    # membership from message authorship.
+                    # Membership/role is a separate observation. It is never
+                    # inferred merely from a discovered chat or message.
                     try:
                         permissions = await client.get_permissions(chat_entity, entity)
                         role = "member"
