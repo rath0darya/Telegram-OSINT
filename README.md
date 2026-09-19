@@ -14,11 +14,11 @@ This project collects and preserves **publicly accessible Telegram information**
 - Extract links, usernames, emails, domains and common IOCs from public text
 - Local SQLite case database
 - Evidence records with timestamps and SHA-256 hashes
-- JSON and human-readable reports
+- Responsive HTML reports (the only report format)
 - Configurable rate limiting and request timeout
 - Real local analysis: top terms, hashtags, mentions, activity-by-day and engagement
 - Related public username extraction from collected evidence
-- CSV evidence export for spreadsheets
+- Mobile-friendly, desktop-friendly, and print-friendly HTML evidence views
 - Offline-friendly report inspection
 - No RaaSHub/RaaSHub-AI dependency
 
@@ -37,9 +37,9 @@ Run:
 
 ```bash
 ./tg-osint @telegram
-./tg-osint https://t.me/telegram --json
-./tg-osint @telegram --messages 100 --csv
-./tg-osint @telegram --messages 200 --json
+./tg-osint https://t.me/telegram
+./tg-osint @telegram --messages 100
+./tg-osint @telegram --messages 200
 ```
 
 ### Optional Telegram API access
@@ -61,7 +61,7 @@ The optional API collector is deliberately limited to public entity metadata and
 
 ## Output
 
-Reports are written under `reports/` by default. Each evidence item includes source, collection time, content hash, and provenance.
+Reports are written under `reports/` by default as `.html` files only. The responsive report contains collection statistics, engagement, IOC sections, activity tables, message analysis, evidence cards, hashes, metadata, and collection warnings. It adapts to mobile and desktop screens and includes print-friendly CSS.
 
 ## Ethics / authorization
 
