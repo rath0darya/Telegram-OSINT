@@ -35,6 +35,15 @@ def build_report(target, case_id, evidence, errors, analysis=None, intel=None):
 
 
 def _e(v):
+    if v is None:
+        return ""
+    value = str(v)
+    # Normalize ISO timestamps to a compact, consistent UTC display.
+    if value.endswith("+00:00") && "T" in value:
+        value = value[:-6] + " UTC"
+        value = value.replace("T", " ")
+    return html.escape(value, quote=True)
+
     return html.escape("" if v is None else str(v), quote=True)
 
 
