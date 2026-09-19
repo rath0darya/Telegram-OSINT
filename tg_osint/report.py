@@ -249,7 +249,7 @@ def write_html(report, path):
             mapping = (
                 '<div class="meta"><span>Атрибуция</span><strong>ТОЧНОЕ СОВПАДЕНИЕ ID — сообщение принадлежит цели</strong></div>'
                 if exact else
-                '<div class="meta"><span>Атрибуция</span><strong>НЕТ — контекст; ID автора отличается или неизвестен</strong></div>'
+                '<div class="meta"><span>Атрибуция</span><strong title="NO — context only; different/unknown author ID">НЕТ — контекст; ID автора отличается или неизвестен</strong></div>'
             )
             ids = f'<div class="meta"><span>Telegram ID</span><code>message={_e(metadata.get("message_id"))} · chat={_e((metadata.get("chat") or {}).get("id"))} · author={_e(author_id)}</code></div>'
         else:
