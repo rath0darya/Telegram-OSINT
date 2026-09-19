@@ -47,7 +47,7 @@ def _chat_data(entity: Any) -> dict:
 
 
 async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
-    from telethon import TelegramClient
+    from telethon import TelegramClient, functions, types
 
     api_id = os.getenv("TELEGRAM_API_ID")
     api_hash = os.getenv("TELEGRAM_API_HASH")
@@ -70,9 +70,19 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
         search_seen = 0
         search_with_text = 0
         search_errors = []
+        discovery_errors = []
+        discovered_chats = []
+        chat_scan_seen = 0
+        chat_scan_matches = 0
+        membership_observations = 0
+        stored_message_keys = set()
 
         async def collect_one(msg, search_context=False):
             nonlocal seen, with_text, search_seen, search_with_text
+            key = (getattr(msg, "chat_id", None), getattr(msg, "id", None))
+            if key in stored_message_keys:
+                return
+            stored_message_keys.add(key)
             seen += 1
             if search_context:
                 search_seen += 1
@@ -192,9 +202,8 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
 
         async def collect_global_author_messages():
             nonlocal global_author_seen
-            # Resolve the target to the input-peer form expected by Telegram's
-            # global from_user filter. Passing the raw User object can produce
-            # InputPeerEmpty on some Telethon/Telegram combinations.
+            # Keep this as an optional accelerator. Telegram may reject the
+            # from_user peer for global search even after entity resolution.
             author_peer = await client.get_input_entity(entity)
             async for msg in client.iter_messages(
                 None, from_user=author_peer, limit=min(limit, 100)
@@ -218,6 +227,105 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                     global_reference_seen += 1
                     await collect_one(msg, search_context=True)
 
+        async def discover_public_chats():
+            nonlocal discovered_chats
+            queries = []
+            if public_username:
+                queries.extend([public_username, f"@{public_username}"])
+            display_name = data.get("display_name")
+            if display_name:
+                queries.append(display_name)
+            seen_chat_ids = set()
+            for query in dict.fromkeys(q for q in queries if q):
+                try:
+                    result = await client(functions.contacts.SearchRequest(
+                        q=query,
+                        limit=100,
+                    ))
+                    for item in list(getattr(result, "chats", None) or []) + list(getattr(result, "users", None) or []):
+                        if isinstance(item, types.Channel):
+                            if getattr(item, "username", None) or getattr(item, "access_hash", None):
+                                chat_id = getattr(item, "id", None)
+                                if chat_id not in seen_chat_ids:
+                                    seen_chat_ids.add(chat_id)
+                                    discovered_chats.append(item)
+                        elif isinstance(item, types.Chat):
+                            chat_id = getattr(item, "id", None)
+                            if chat_id not in seen_chat_ids:
+                                seen_chat_ids.add(chat_id)
+                                discovered_chats.append(item)
+                except Exception as exc:
+                    discovery_errors.append(f"{query}: {type(exc).__name__}: {exc}")
+
+        async def scan_discovered_chats():
+            nonlocal chat_scan_seen, chat_scan_matches, membership_observations
+            remaining = max(0, limit)
+            target_id = int(entity_id)
+            for chat in discovered_chats:
+                if remaining <= 0:
+                    break
+                try:
+                    # Resolve the chat before iteration so Telegram has the
+                    # correct input peer/access hash.
+                    chat_entity = await client.get_input_entity(chat)
+                    chat_data = _chat_data(chat)
+                    scanned_here = 0
+                    async for msg in client.iter_messages(chat_entity, limit=remaining):
+                        scanned_here += 1
+                        before = len(out)
+                        await collect_one(msg, search_context=False)
+                        chat_scan_seen += 1
+                        remaining -= 1
+                        # Count only newly stored messages whose sender is the
+                        # resolved target. The final author ID is checked below.
+                        if len(out) > before:
+                            body = msg.message or ""
+                            try:
+                                sender = await msg.get_sender()
+                                if getattr(sender, "id", None) == target_id:
+                                    chat_scan_matches += 1
+                            except Exception:
+                                pass
+                        if remaining <= 0:
+                            break
+
+                    # Record a membership/role observation when Telegram exposes
+                    # it through the authenticated account. This does not infer
+                    # membership from message authorship.
+                    try:
+                        permissions = await client.get_permissions(chat_entity, entity)
+                        role = "member"
+                        if getattr(permissions, "is_creator", False):
+                            role = "creator"
+                        elif getattr(permissions, "is_admin", False):
+                            role = "admin"
+                        status = "current_member" if getattr(permissions, "is_member", True) else "not_current_member"
+                        membership_observations += 1
+                        membership_payload = {
+                            "membership": {
+                                "chat": chat_data,
+                                "status": status,
+                                "role": role,
+                                "observed_via": "telegram_permissions",
+                            },
+                            "entity": data,
+                        }
+                        membership_text = str(membership_payload)
+                        out.append(Evidence(
+                            "telegram_public_membership",
+                            f"https://t.me/{chat_data.get('username')}" if chat_data.get("username") else f"telegram://chat/{chat_data.get('id')}",
+                            now_iso(),
+                            f"Membership observation for {chat_data.get('title') or chat_data.get('username') or chat_data.get('id')}",
+                            membership_text,
+                            sha256_text(membership_text),
+                            membership_payload,
+                        ))
+                    except Exception:
+                        pass
+                except Exception as exc:
+                    discovery_errors.append(
+                        f"chat {getattr(chat, 'id', None)}: {type(exc).__name__}: {exc}"
+                    )
         if limit > 0:
             for attempt in range(3):
                 try:
@@ -256,9 +364,14 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                         else:
                             break
 
+            # Broad public-surface discovery is the fallback when Telegram's
+            # global from_user index cannot resolve the target peer.
+            await discover_public_chats()
+            await scan_discovered_chats()
+
         source = f"https://t.me/{public_username}" if public_username else f"telegram://id/{entity_id}"
         entity_text = str(data)
-        out.insert(0, Evidence("telegram_api_public_entity", source, now_iso(), data.get("title") or data.get("display_name") or public_username or str(entity_id), entity_text, sha256_text(entity_text), {"entity": data, "collection": {"messages_requested": max(0, limit), "messages_seen": seen, "messages_with_text": with_text, "history_seen": seen - search_seen, "history_with_text": with_text - search_with_text, "search_seen": search_seen, "search_with_text": search_with_text, "search_errors": search_errors, "history_errors": history_errors, "global_author_seen": global_author_seen, "global_author_errors": global_author_errors, "global_reference_seen": global_reference_seen, "resolved_telegram_id": entity_id}, "iocs": extract_iocs(entity_text)}))
+        out.insert(0, Evidence("telegram_api_public_entity", source, now_iso(), data.get("title") or data.get("display_name") or public_username or str(entity_id), entity_text, sha256_text(entity_text), {"entity": data, "collection": {"messages_requested": max(0, limit), "messages_seen": seen, "messages_with_text": with_text, "history_seen": seen - search_seen, "history_with_text": with_text - search_with_text, "search_seen": search_seen, "search_with_text": search_with_text, "search_errors": search_errors, "history_errors": history_errors, "global_author_seen": global_author_seen, "global_author_errors": global_author_errors, "global_reference_seen": global_reference_seen, "discovered_chat_count": len(discovered_chats), "chat_scan_seen": chat_scan_seen, "chat_scan_matches": chat_scan_matches, "membership_observations": membership_observations, "discovery_errors": discovery_errors, "resolved_telegram_id": entity_id}, "iocs": extract_iocs(entity_text)}))
     finally:
         await client.disconnect()
     return out
