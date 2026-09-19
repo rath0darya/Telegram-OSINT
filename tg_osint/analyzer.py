@@ -20,6 +20,8 @@ def analyze_evidence(evidence: list, target_id: int | None = None) -> dict:
     reference=[e for e in messages if (e.metadata or {}).get("search_context") and e not in authored]
     unattributed=[e for e in messages if author_id(e) is None]
     non_authored=[e for e in messages if e not in authored]
+    author_ids={author_id(e) for e in messages if author_id(e) is not None}
+    author_mismatch_count=sum(1 for e in messages if author_id(e) is not None and author_id(e) != target_id)
     def message_iocs(items):
         combined="\\n".join(e.text for e in items)
         return extract_iocs(combined)
@@ -40,7 +42,7 @@ def analyze_evidence(evidence: list, target_id: int | None = None) -> dict:
             except ValueError: pass
         if isinstance(m.get("views"),int): views.append(m["views"])
         if isinstance(m.get("forwards"),int): forwards.append(m["forwards"])
-    return {"message_count":len(messages),"authored_message_count":len(authored),"reference_message_count":len(reference),"unattributed_message_count":len(unattributed),"non_authored_message_count":len(non_authored),"chat_count":len(chats),"all_observed_chat_count":len(all_chats),"iocs":iocs,
+    return {"message_count":len(messages),"authored_message_count":len(authored),"reference_message_count":len(reference),"context_message_count":len(non_authored),"unattributed_message_count":len(unattributed),"non_authored_message_count":len(non_authored),"author_id_observed_count":len(author_ids),"author_mismatch_count":author_mismatch_count,"chat_count":len(chats),"all_observed_chat_count":len(all_chats),"iocs":iocs,
       "target_iocs":target_iocs,"reference_iocs":reference_iocs,
       "top_words":[{"value":k,"count":v} for k,v in words.most_common(30)],
       "hashtags":[{"value":k,"count":v} for k,v in hashtags.most_common(30)],
