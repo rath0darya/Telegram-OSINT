@@ -6,34 +6,31 @@ from tg_osint.report import build_report, write_html
 
 
 class ReportTests(unittest.TestCase):
-    def test_manual_relationships_are_report_only(self):
-        manual = [{
-            "observed": "01.09.2026",
-            "relation": "reaction_given",
-            "person": "Example",
-            "telegram_id": 123,
-            "username": "@example",
-            "reaction": "❤",
-            "source": "https://t.me/example/1",
-        }]
+    def test_report_is_self_contained(self):
+        from tg_osint.core import Evidence
+        evidence = [Evidence(
+            "telegram_api_public_entity",
+            "telegram://id/123",
+            "2026-09-19T00:00:00+00:00",
+            "Target",
+            "entity",
+            "sha",
+            {"entity": {"id": 123, "username": "target"}},
+        )]
         report = build_report(
             {"handle": "@target", "username": "target", "target_type": "username", "url": "https://t.me/target"},
-            1,
-            [],
-            [],
-            analysis={},
-            manual_relationships=manual,
+            1, evidence, [], analysis={},
         )
-        self.assertEqual(report["manual_relationships"], manual)
-        self.assertEqual(report["history"], {})
-
-        with tempfile.TemporaryDirectory() as td:
-            path = Path(td) / "report.html"
-            write_html(report, path)
-            text = path.read_text(encoding="utf-8")
-            self.assertIn("Manual relationship references", text)
-            self.assertIn("Example", text)
-            self.assertIn("https://t.me/example/1", text)
+        self.assertNotIn("manual_relationships", report)
+        self.assertEqual(report["evidence"], [{
+            "source_type": "telegram_api_public_entity",
+            "source_url": "telegram://id/123",
+            "collected_at": "2026-09-19T00:00:00+00:00",
+            "title": "Target",
+            "text": "entity",
+            "sha256": "sha",
+            "metadata": {"entity": {"id": 123, "username": "target"}},
+        }])
 
     def test_evidence_mapping_uses_exact_author_id(self):
         from tg_osint.core import Evidence
@@ -71,6 +68,8 @@ class ReportTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             self.assertIn("NO — context only; different/unknown author ID", text)
             self.assertNotIn("resolved_target_id", text)
+            self.assertNotIn("Manual relationship references", text)
+            self.assertNotIn("external reference data", text)
 
 
 if __name__ == "__main__":
