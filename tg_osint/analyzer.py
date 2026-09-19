@@ -5,10 +5,14 @@ from datetime import datetime
 from .core import extract_iocs
 WORD_RE=re.compile(r"[A-Za-z][A-Za-z0-9_'-]{2,}")
 HASHTAG_RE=re.compile(r"(?<!\w)#([A-Za-z0-9_]{2,64})")
-def analyze_evidence(evidence: list) -> dict:
+def analyze_evidence(evidence: list, target_id: int | None = None) -> dict:
     messages=[e for e in evidence if e.source_type=="telegram_public_message"]
-    authored=[e for e in messages if not (e.metadata or {}).get("search_context")]
+    def author_id(e):
+        author=(e.metadata or {}).get("author")
+        return author.get("id") if isinstance(author, dict) else None
+    authored=[e for e in messages if target_id is not None and author_id(e) == target_id]
     reference=[e for e in messages if (e.metadata or {}).get("search_context")]
+    unattributed=[e for e in messages if author_id(e) is None]
     chats={((e.metadata or {}).get("chat") or {}).get("id") for e in messages if ((e.metadata or {}).get("chat") or {}).get("id") is not None}
     combined="\n".join(e.text for e in evidence)
     iocs=extract_iocs(combined); words=Counter(w.lower() for w in WORD_RE.findall(combined))
@@ -22,7 +26,7 @@ def analyze_evidence(evidence: list) -> dict:
             except ValueError: pass
         if isinstance(m.get("views"),int): views.append(m["views"])
         if isinstance(m.get("forwards"),int): forwards.append(m["forwards"])
-    return {"message_count":len(messages),"authored_message_count":len(authored),"reference_message_count":len(reference),"chat_count":len(chats),"iocs":iocs,
+    return {"message_count":len(messages),"authored_message_count":len(authored),"reference_message_count":len(reference),"unattributed_message_count":len(unattributed),"chat_count":len(chats),"iocs":iocs,
       "top_words":[{"value":k,"count":v} for k,v in words.most_common(30)],
       "hashtags":[{"value":k,"count":v} for k,v in hashtags.most_common(30)],
       "mentions":sorted(set(iocs["usernames"])),
