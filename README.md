@@ -20,7 +20,11 @@ Membership/admin information is recorded only when Telegram actually exposes the
 - Preserve observed username and display-name history
 - Store profile snapshots over time
 - Store accessible public messages with author IDs when exposed
-- Store message date, views, forwards, replies, forward sources and explicit mentions
+- Store message date/edit date, views, forwards, replies, forward sources, explicit mentions, media type and reaction aggregates
+- Distinguish authored-message history from public search/reference observations
+- Preserve collection diagnostics so failed public searches are visible instead of silently treated as empty results
+- Store reaction aggregates as historical message observations
+- Maintain evidence-backed relationship edges and deterministic SHA-256 provenance
 - Build observed mentioned/replied/forwarded relationship edges
 - Store membership observations supplied by collection code
 - Persistent SQLite historical intelligence database
@@ -59,11 +63,17 @@ The history command shows stored identifiers, profile snapshots, authored messag
 
 ## Groups, channels and admin observations
 
-The data model supports chat membership status and role observations, including member/admin-style roles when Telegram exposes them. The current collector does not claim to enumerate every group or channel a user has ever joined. Private or inaccessible membership is not reconstructed.
+The data model supports chat membership status and role observations, including member/admin-style roles when Telegram exposes them. The collector records chats and membership/activity observations that Telegram actually exposes through the authenticated account and public message history. It does not claim to enumerate every group or channel a user has ever joined. Private or inaccessible membership is not reconstructed.
+
+## Production collection model
+
+A run is an observation snapshot, not a claim of complete lifetime history. Re-running the collector against the same Telegram ID accumulates profile, identifier, message, chat, reaction and relationship observations in SQLite. Public search hits are explicitly marked as reference observations and are never silently counted as target-authored messages. Search failures are retained in collection diagnostics.
+
+The tool deliberately does not attempt to recover private messages, private phone numbers, IP addresses, passwords, hidden membership, deleted/private data, account credentials or access-controlled information. Unknown remains unknown.
 
 ## Reports
 
-Reports are written as HTML only under reports/. They contain stable ID identity, observed username/name history, profile snapshots, messages authored by the resolved ID when available, observed group/channel membership information, relationships, indicators, engagement and expandable evidence.
+Reports are written as HTML only under reports/ and include collection coverage diagnostics, identity history, authored/reference message separation, observed chats, relationships, indicators, engagement, reactions and expandable raw evidence. They contain stable ID identity, observed username/name history, profile snapshots, messages authored by the resolved ID when available, observed group/channel membership information, relationships, indicators, engagement and expandable evidence.
 
 ## Tests
 
