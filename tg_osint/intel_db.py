@@ -62,7 +62,7 @@ class IntelligenceDB:
             row = self.db.execute("SELECT id FROM entities WHERE lower(username)=lower(?)", (username,)).fetchone()
         if row:
             eid = row["id"]
-            self.db.execute("UPDATE entities SET username=COALESCE(?,username), display_name=COALESCE(?,display_name), entity_type=?, last_observed=?, metadata_json=? WHERE id=?", (username, display_name, entity_type, observed_at, json.dumps(metadata, sort_keys=True), eid))
+            self.db.execute("UPDATE entities SET telegram_id=COALESCE(?,telegram_id), username=COALESCE(?,username), display_name=COALESCE(?,display_name), entity_type=?, last_observed=?, metadata_json=? WHERE id=?", (telegram_id, username, display_name, entity_type, observed_at, json.dumps(metadata, sort_keys=True), eid))
         else:
             cur = self.db.execute("INSERT INTO entities(telegram_id,username,display_name,entity_type,first_observed,last_observed,metadata_json) VALUES(?,?,?,?,?,?,?)", (telegram_id, username, display_name, entity_type, observed_at, observed_at, json.dumps(metadata, sort_keys=True)))
             eid = cur.lastrowid
