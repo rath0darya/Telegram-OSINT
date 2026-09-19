@@ -8,8 +8,24 @@ UA = "Telegram-OSINT/0.1 (+public-research; contact repository maintainer)"
 
 def fetch_public_page(url: str, timeout: int = 15, rate_limit: float = 1.0) -> Evidence:
     sleep_rate(rate_limit)
-    r = requests.get(url, headers={"User-Agent": UA}, timeout=timeout, allow_redirects=True)
-    r.raise_for_status()
+    last_error = None
+    for attempt in range(3):
+        try:
+            r = requests.get(
+                url,
+                headers={"User-Agent": UA},
+                timeout=timeout,
+                allow_redirects=True,
+            )
+            r.raise_for_status()
+            break
+        except requests.RequestException as exc:
+            last_error = exc
+            if attempt == 2:
+                raise
+            sleep_rate(min(2.0 * (attempt + 1), 5.0))
+    if last_error is not None and "r" not in locals():
+        raise last_error
     soup = BeautifulSoup(r.text, "html.parser")
     title = soup.title.get_text(" ", strip=True) if soup.title else None
 
