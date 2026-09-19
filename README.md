@@ -42,7 +42,7 @@ Membership/admin information is recorded only when Telegram actually exposes the
 - Store membership observations supplied by collection code
 - Persistent SQLite historical intelligence database
 - Search by username, name or Telegram ID
-- HTML-only responsive investigation reports
+- Standalone HTML investigation reports containing their own collected evidence
 - Expandable raw evidence and metadata
 - SHA-256 evidence hashes and collection timestamps
 - Local IOC and message analysis
@@ -86,7 +86,7 @@ The tool deliberately does not attempt to recover private messages, private phon
 
 ## Reports
 
-Reports are written as HTML only under reports/ and include collection coverage diagnostics, identity history, authored/reference message separation, observed chats, relationships, indicators, engagement, reactions and expandable raw evidence. They contain stable ID identity, observed username/name history, profile snapshots, messages authored by the resolved ID when available, observed group/channel membership information, relationships, indicators, engagement and expandable evidence.
+Reports are written as standalone HTML under reports/. Each report embeds its own collected evidence, raw metadata, hashes, analysis, identity history available to the tool, relationships, indicators, engagement and collection diagnostics. Reports do not import benchmark files, manually supplied relationship references, or other external reference datasets. Persistent SQLite history may be used during generation, but the resulting HTML embeds the data it displays and remains readable as a self-contained report.
 
 ## Tests
 
