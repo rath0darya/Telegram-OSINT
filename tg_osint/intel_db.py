@@ -65,19 +65,27 @@ class IntelligenceDB:
                 cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
     def _migrate(self):
-        with self.db.cursor() as cur:
-            cur.execute(
-                "SELECT COLUMN_NAME AS name FROM information_schema.COLUMNS "
-                "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='messages'"
-            )
-            cols = {r["name"] for r in cur.fetchall()}
-            for name, ddl in {
-                "author_entity_id": "ALTER TABLE messages ADD COLUMN author_entity_id BIGINT",
-                "reply_to_message_id": "ALTER TABLE messages ADD COLUMN reply_to_message_id BIGINT",
-                "forward_from_entity_id": "ALTER TABLE messages ADD COLUMN forward_from_entity_id BIGINT",
-            }.items():
-                if name not in cols:
-                    cur.execute(ddl)
+        for table, additions in {
+            "messages": {
+                "author_entity_id": "BIGINT",
+                "reply_to_message_id": "BIGINT",
+                "forward_from_entity_id": "BIGINT",
+            },
+            "edges": {
+                "message_id": "BIGINT",
+                "metadata_json": "TEXT NOT NULL DEFAULT '{}'",
+            },
+        }.items():
+            with self.db.cursor() as cur:
+                cur.execute(
+                    "SELECT COLUMN_NAME AS name FROM information_schema.COLUMNS "
+                    "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=%s",
+                    (table,),
+                )
+                cols = {r["name"] for r in cur.fetchall()}
+                for name, ddl in additions.items():
+                    if name not in cols:
+                        cur.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
 
     def _entity(self, telegram_id, username, display_name, entity_type, observed_at, metadata):
         # Numeric Telegram ID is the authoritative identity key. Never merge
