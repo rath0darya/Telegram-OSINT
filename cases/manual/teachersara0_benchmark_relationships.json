@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0.0",
+  "target_telegram_id": 7030758596,
+  "source": "User-supplied Teacher Sara benchmark HTML",
+  "scope": "report_only_manual_reference",
+  "relationships": [
+    {
+      "observed": "2026-08-11",
+      "relation": "reacted_to_target_message",
+      "person": "Global GVoice_CEO",
+      "telegram_id": 6575359185,
+      "username": "gvoiice",
+      "reaction": "👍",
+      "source": "https://t.me/nxtjacuzzi/5088"
+    },
+    {
+      "observed": "2026-09-04",
+      "relation": "reacted_to_target_message",
+      "person": "Satish ❂🪬",
+      "telegram_id": 7503330227,
+      "username": "Satish_1704",
+      "reaction": "😁",
+      "source": "https://t.me/Primeslooter_Discussion/233727"
+    },
+    {
+      "observed": "2026-07-08",
+      "relation": "reacted_to_target_message",
+      "person": "Banks Karim",
+      "telegram_id": 7687495849,
+      "username": null,
+      "reaction": "❤",
+      "source": "https://t.me/click_farm01/5664"
+    },
+    {
+      "observed": "2026-08-10",
+      "relation": "reacted_to_target_message",
+      "person": "Mint Smasher",
+      "telegram_id": 8870561518,
+      "username": null,
+      "reaction": "👍",
+      "source": "https://t.me/MistralFree/10289"
+    },
+    {
+      "observed": "2026-08-10",
+      "relation": "reacted_to_target_message",
+      "person": "Cookie Smasher",
+      "telegram_id": 8907878780,
+      "username": null,
+      "reaction": "❤",
+      "source": "https://t.me/metallamafree/13058"
+    },
+    {
+      "observed": "2026-09-01",
+      "relation": "target_reacted_to_user",
+      "person": "Own master😎💞",
+      "telegram_id": 5915965757,
+      "username": "saitanstar01",
+      "reaction": "❤",
+      "source": "https://t.me/Primeslooter_Discussion/214980"
+    },
+    {
+      "observed": "2026-09-01",
+      "relation": "target_reacted_to_user",
+      "person": "⚡ 𝐘𝐎𝐆𝐈 🦅",
+      "telegram_id": 7041414649,
+      "username": null,
+      "reaction": "❤",
+      "source": "https://t.me/swigggy_loots/197104"
+    },
+    {
+      "observed": "2026-06-06",
+      "relation": "target_reacted_to_user",
+      "person": "IGNOU University",
+      "telegram_id": 7851438235,
+      "username": null,
+      "reaction": "❤",
+      "source": "https://t.me/osintchatt/5546"
+    }
+  ]
+}
