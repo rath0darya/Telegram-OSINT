@@ -1,4 +1,3 @@
-import tempfile
 import unittest
 
 from tg_osint.core import Evidence, sha256_text
@@ -7,8 +6,8 @@ from tg_osint.intel_db import IntelligenceDB
 
 class IntelligenceDBTests(unittest.TestCase):
     def test_username_history_stays_on_same_telegram_id(self):
-        with tempfile.TemporaryDirectory() as d:
-            db = IntelligenceDB(f"{d}/intel.db")
+        db = IntelligenceDB()
+        try:
             for username, ts in (("old_name", "2026-09-18T00:00:00+00:00"), ("new_name", "2026-09-19T00:00:00+00:00")):
                 ev = Evidence("telegram_api_public_entity", f"https://t.me/{username}", ts, username, username, sha256_text(username + ts), {"entity": {"id": 123, "username": username, "first_name": "Test"}})
                 db.ingest([ev])
@@ -20,11 +19,12 @@ class IntelligenceDBTests(unittest.TestCase):
             self.assertEqual(len(history["profiles"]), 2)
             self.assertEqual(db.resolve_identifier("telegram_username", "old_name"), 123)
             self.assertEqual(db.resolve_identifier("telegram_username", "new_name"), 123)
+        finally:
             db.close()
 
     def test_username_reuse_never_merges_different_telegram_ids(self):
-        with tempfile.TemporaryDirectory() as d:
-            db = IntelligenceDB(f"{d}/intel.db")
+        db = IntelligenceDB()
+        try:
             first = Evidence(
                 "telegram_api_public_entity",
                 "https://t.me/sharedname",
@@ -45,17 +45,18 @@ class IntelligenceDBTests(unittest.TestCase):
             )
             db.ingest([first, second])
             self.assertEqual(db.resolve_identifier("telegram_username", "sharedname"), 222)
-            rows = db.db.execute(
+            rows = db._execute(
                 "SELECT telegram_id, first_name FROM profile_snapshots JOIN entities ON entities.id=profile_snapshots.entity_id ORDER BY observed_at"
             ).fetchall()
             self.assertEqual([r["telegram_id"] for r in rows], [111, 222])
             self.assertEqual(len(db.search("111")), 1)
             self.assertEqual(len(db.search("222")), 1)
+        finally:
             db.close()
 
     def test_message_author_and_mention_relationship(self):
-        with tempfile.TemporaryDirectory() as d:
-            db = IntelligenceDB(f"{d}/intel.db")
+        db = IntelligenceDB()
+        try:
             ev = Evidence("telegram_public_message", "https://t.me/example/42", "2026-09-19T00:00:00+00:00", "Public message 42", "hello @target", sha256_text("message"), {
                 "message_id": 42,
                 "date": "2026-09-19T00:00:00+00:00",
@@ -68,34 +69,37 @@ class IntelligenceDBTests(unittest.TestCase):
             self.assertEqual(len(history["messages"]), 1)
             self.assertEqual(history["messages"][0]["telegram_message_id"], 42)
             self.assertTrue(any(x["edge_type"] == "mentioned" for x in history["relationships"]))
+        finally:
             db.close()
 
     def test_legacy_edges_schema_is_migrated(self):
-        with tempfile.TemporaryDirectory() as d:
-            import sqlite3
-            path = f"{d}/intel.db"
-            conn = sqlite3.connect(path)
-            conn.execute("""CREATE TABLE edges (
-                id INTEGER PRIMARY KEY,
-                source_entity_id INTEGER,
-                target_entity_id INTEGER,
-                source_chat_id INTEGER,
-                edge_type TEXT NOT NULL,
-                observed_at TEXT NOT NULL,
-                source_url TEXT,
-                evidence_sha256 TEXT NOT NULL
-            )""")
-            conn.commit()
-            conn.close()
-            db = IntelligenceDB(path)
-            cols = {r["name"] for r in db.db.execute("PRAGMA table_info(edges)")}
+        db = IntelligenceDB()
+        try:
+            with db.db.cursor() as cur:
+                cur.execute("DROP TABLE edges")
+                cur.execute("""CREATE TABLE edges (
+                    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                    source_entity_id BIGINT,
+                    target_entity_id BIGINT,
+                    source_chat_id BIGINT,
+                    edge_type TEXT NOT NULL,
+                    observed_at TEXT NOT NULL,
+                    source_url TEXT,
+                    evidence_sha256 TEXT NOT NULL
+                ) ENGINE=InnoDB""")
+            db._migrate()
+            db.db.commit()
+            cols = {r["name"] for r in db._execute(
+                "SELECT COLUMN_NAME AS name FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='edges'"
+            ).fetchall()}
             self.assertIn("message_id", cols)
             self.assertIn("metadata_json", cols)
+        finally:
             db.close()
 
     def test_reaction_metadata_is_persisted(self):
-        with tempfile.TemporaryDirectory() as d:
-            db = IntelligenceDB(f"{d}/intel.db")
+        db = IntelligenceDB()
+        try:
             ev = Evidence("telegram_public_message", "https://t.me/example/43", "2026-09-19T00:00:00+00:00", "Public message 43", "hello", sha256_text("reaction-message"), {
                 "message_id": 43,
                 "date": "2026-09-19T00:00:00+00:00",
@@ -107,6 +111,7 @@ class IntelligenceDBTests(unittest.TestCase):
             history = db.entity_history(111)
             self.assertEqual(len(history["reactions"]), 1)
             self.assertEqual(history["reactions"][0]["count"], 7)
+        finally:
             db.close()
 
 
