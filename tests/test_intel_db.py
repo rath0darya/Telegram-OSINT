@@ -37,6 +37,22 @@ class IntelligenceDBTests(unittest.TestCase):
             self.assertTrue(any(x["edge_type"] == "mentioned" for x in history["relationships"]))
             db.close()
 
+    def test_reaction_metadata_is_persisted(self):
+        with tempfile.TemporaryDirectory() as d:
+            db = IntelligenceDB(f"{d}/intel.db")
+            ev = Evidence("telegram_public_message", "https://t.me/example/43", "2026-09-19T00:00:00+00:00", "Public message 43", "hello", sha256_text("reaction-message"), {
+                "message_id": 43,
+                "date": "2026-09-19T00:00:00+00:00",
+                "chat": {"id": 900, "username": "example", "title": "Example", "type": "channel"},
+                "author": {"id": 111, "username": "author", "first_name": "Author"},
+                "reaction_summary": [{"reaction": "👍", "count": 7}],
+            })
+            db.ingest([ev])
+            history = db.entity_history(111)
+            self.assertEqual(len(history["reactions"]), 1)
+            self.assertEqual(history["reactions"][0]["count"], 7)
+            db.close()
+
 
 if __name__ == "__main__":
     unittest.main()
