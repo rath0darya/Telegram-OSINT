@@ -3,4 +3,6 @@ beautifulsoup4>=4.12,<5
 python-dotenv>=1.0,<2
 # Optional API collector:
 telethon>=1.45,<2
-\n# MariaDB persistence (pure-Python driver)\npymysql>=1.1,<2\n
+
+# MariaDB persistence (pure-Python driver)
+pymysql>=1.1,<2
