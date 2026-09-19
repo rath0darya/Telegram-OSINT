@@ -163,8 +163,8 @@ class IntelligenceDB:
         q = f"%{query.lower()}%"
         rows = self.db.execute(
             """SELECT id,username,display_name,entity_type,first_observed,last_observed
-            FROM entities WHERE lower(COALESCE(username,'')) LIKE ? OR lower(COALESCE(display_name,'')) LIKE ?
-            ORDER BY last_observed DESC LIMIT ?""", (q, q, limit)).fetchall()
+            FROM entities WHERE lower(COALESCE(username,'')) LIKE ? OR lower(COALESCE(display_name,'')) LIKE ? OR CAST(telegram_id AS TEXT) LIKE ?
+            ORDER BY last_observed DESC LIMIT ?""", (q, q, q, limit)).fetchall()
         return [dict(r) for r in rows]
 
     def close(self):
