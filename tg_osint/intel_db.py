@@ -9,10 +9,10 @@ from .core import Evidence, now_iso
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (id INTEGER PRIMARY KEY, started_at TEXT NOT NULL, finished_at TEXT, target TEXT, evidence_count INTEGER DEFAULT 0);
-CREATE TABLE IF NOT EXISTS entities (id INTEGER PRIMARY KEY, telegram_id INTEGER UNIQUE, username TEXT, display_name TEXT, entity_type TEXT NOT NULL DEFAULT 'unknown', first_observed TEXT NOT NULL, last_observed TEXT NOT NULL, metadata_json TEXT NOT NULL DEFAULT '{}');
+CREATE TABLE IF NOT EXISTS entities (id INTEGER PRIMARY KEY, telegram_id BIGINT UNIQUE, username TEXT, display_name TEXT, entity_type TEXT NOT NULL DEFAULT 'unknown', first_observed TEXT NOT NULL, last_observed TEXT NOT NULL, metadata_json TEXT NOT NULL DEFAULT '{}');
 CREATE TABLE IF NOT EXISTS identifiers (id INTEGER PRIMARY KEY, entity_id INTEGER NOT NULL, identifier_type TEXT NOT NULL, value TEXT NOT NULL, first_observed TEXT NOT NULL, last_observed TEXT NOT NULL, observation_count INTEGER NOT NULL DEFAULT 1, UNIQUE(entity_id, identifier_type, value));
 CREATE TABLE IF NOT EXISTS profile_snapshots (id INTEGER PRIMARY KEY, entity_id INTEGER NOT NULL, observed_at TEXT NOT NULL, username TEXT, first_name TEXT, last_name TEXT, display_name TEXT, title TEXT, about TEXT, verified INTEGER, scam INTEGER, fake INTEGER, source_url TEXT, evidence_sha256 TEXT NOT NULL, metadata_json TEXT NOT NULL DEFAULT '{}', UNIQUE(entity_id, observed_at, evidence_sha256));
-CREATE TABLE IF NOT EXISTS chats (id INTEGER PRIMARY KEY, telegram_id INTEGER UNIQUE, username TEXT, title TEXT, chat_type TEXT NOT NULL DEFAULT 'unknown', first_observed TEXT NOT NULL, last_observed TEXT NOT NULL, metadata_json TEXT NOT NULL DEFAULT '{}');
+CREATE TABLE IF NOT EXISTS chats (id INTEGER PRIMARY KEY, telegram_id BIGINT UNIQUE, username TEXT, title TEXT, chat_type TEXT NOT NULL DEFAULT 'unknown', first_observed TEXT NOT NULL, last_observed TEXT NOT NULL, metadata_json TEXT NOT NULL DEFAULT '{}');
 CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, chat_id INTEGER NOT NULL, telegram_message_id INTEGER NOT NULL, author_entity_id INTEGER, observed_at TEXT NOT NULL, message_date TEXT, text TEXT NOT NULL, source_url TEXT, views INTEGER, forwards INTEGER, reply_to_message_id INTEGER, forward_from_entity_id INTEGER, sha256 TEXT NOT NULL, metadata_json TEXT NOT NULL DEFAULT '{}', UNIQUE(chat_id, telegram_message_id));
 CREATE TABLE IF NOT EXISTS reactions (id INTEGER PRIMARY KEY, message_id INTEGER NOT NULL, reaction TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 0, observed_at TEXT NOT NULL, source_url TEXT, evidence_sha256 TEXT NOT NULL, UNIQUE(message_id,reaction,evidence_sha256));
 CREATE TABLE IF NOT EXISTS memberships (id INTEGER PRIMARY KEY, entity_id INTEGER NOT NULL, chat_id INTEGER NOT NULL, status TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'member', observed_at TEXT NOT NULL, first_observed TEXT NOT NULL, last_observed TEXT NOT NULL, source_url TEXT, evidence_sha256 TEXT NOT NULL, metadata_json TEXT NOT NULL DEFAULT '{}', UNIQUE(entity_id, chat_id, status, role, observed_at, evidence_sha256));
@@ -65,6 +65,12 @@ class IntelligenceDB:
                 cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
     def _migrate(self):
+        # Telegram user/chat IDs can exceed MariaDB INT and chat IDs can be
+        # negative (for example -100... channel IDs). Keep them signed BIGINT.
+        for table in ("entities", "chats"):
+            with self.db.cursor() as cur:
+                cur.execute(f"ALTER TABLE {table} MODIFY COLUMN telegram_id BIGINT NULL")
+
         for table, additions in {
             "messages": {
                 "author_entity_id": "BIGINT",
