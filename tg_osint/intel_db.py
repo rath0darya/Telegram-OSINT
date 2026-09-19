@@ -37,6 +37,7 @@ class IntelligenceDB:
         # The filename argument is retained for CLI compatibility; persistence
         # is now MariaDB and is configured with TELEGRAM_OSINT_DB_* environment variables.
         self.db = connect()
+
         with self.db.cursor() as cur:
             for statement in SCHEMA.split(";"):
                 statement = statement.strip()
@@ -46,6 +47,11 @@ class IntelligenceDB:
                     cur.execute(statement)
         self._migrate()
         self.db.commit()
+
+    def _execute(self, sql: str, params=()):
+        cur = self.db.cursor()
+        cur.execute(sql, params)
+        return cur
 
     def _ensure_column(self, table: str, column: str, ddl: str):
         with self.db.cursor() as cur:
@@ -76,7 +82,7 @@ class IntelligenceDB:
     def _entity(self, telegram_id, username, display_name, entity_type, observed_at, metadata):
         # Numeric Telegram ID is the authoritative identity key. Never merge
         # two numeric IDs because a username happens to be equal/reused.
-        row = self.db.execute("SELECT id FROM entities WHERE telegram_id=?", (int(telegram_id),)).fetchone() if telegram_id is not None else None
+        row = self._execute("SELECT id FROM entities WHERE telegram_id=?", (int(telegram_id),)).fetchone() if telegram_id is not None else None
         if row is None and telegram_id is None and username:
             row = self.db.execute("SELECT id FROM entities WHERE lower(username)=lower(?) AND telegram_id IS NULL", (username,)).fetchone()
         if row:
