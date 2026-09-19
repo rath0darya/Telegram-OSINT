@@ -161,7 +161,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                 "message_id": msg.id,
                 "date": msg.date.isoformat() if msg.date else None,
                 "edit_date": msg.edit_date.isoformat() if getattr(msg, "edit_date", None) else None,
-                "text": body[:20000],
+                "text": body,
                 "grouped_id": getattr(msg, "grouped_id", None),
                 "post_author": getattr(msg, "post_author", None),
                 "via_bot_id": getattr(msg, "via_bot_id", None),
@@ -184,7 +184,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                     source,
                     now_iso(),
                     f"Public message {msg.id}",
-                    body[:20000],
+                    body,
                     sha256_text(str(payload)),
                     {**payload, "iocs": extract_iocs(body)},
                 )
