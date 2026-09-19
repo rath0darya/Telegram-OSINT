@@ -186,13 +186,38 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
             async for msg in client.iter_messages(entity, limit=limit):
                 await collect_one(msg)
 
+        global_author_seen = 0
+        global_author_errors = []
+        global_reference_seen = 0
+
+        async def collect_global_author_messages():
+            nonlocal global_author_seen
+            # A user's own entity is not a global message-history source. Telegram's
+            # global search supports from_user, which is the correct way to find
+            # publicly searchable messages authored by the resolved account.
+            async for msg in client.iter_messages(
+                None, from_user=entity, limit=min(limit, 100)
+            ):
+                global_author_seen += 1
+                await collect_one(msg, search_context=False)
+
         async def collect_public_search():
+            nonlocal global_reference_seen
             if not public_username:
                 return
-            async for msg in client.iter_messages(
-                None, search=f"@{public_username}", limit=min(limit, 100)
-            ):
-                await collect_one(msg, search_context=True)
+            # Search both forms because Telegram's global index may tokenize
+            # username mentions differently from ordinary text.
+            seen_keys = set()
+            for query in (f"@{public_username}", public_username):
+                async for msg in client.iter_messages(
+                    None, search=query, limit=min(limit, 100)
+                ):
+                    key = (getattr(msg, "chat_id", None), getattr(msg, "id", None))
+                    if key in seen_keys:
+                        continue
+                    seen_keys.add(key)
+                    global_reference_seen += 1
+                    await collect_one(msg, search_context=True)
 
         if limit > 0:
             # Keep partial results when Telegram resets a connection. Each stage is
@@ -205,6 +230,18 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                 except Exception as exc:
                     err = f"{type(exc).__name__}: {exc}"
                     history_errors.append(err)
+                    if attempt < 2:
+                        await asyncio.sleep(1.5 * (attempt + 1))
+                    else:
+                        break
+
+            for attempt in range(3):
+                try:
+                    await collect_global_author_messages()
+                    break
+                except Exception as exc:
+                    err = f"{type(exc).__name__}: {exc}"
+                    global_author_errors.append(err)
                     if attempt < 2:
                         await asyncio.sleep(1.5 * (attempt + 1))
                     else:
@@ -227,7 +264,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
 
         source = f"https://t.me/{public_username}" if public_username else f"telegram://id/{entity_id}"
         entity_text = str(data)
-        out.insert(0, Evidence("telegram_api_public_entity", source, now_iso(), data.get("title") or data.get("display_name") or public_username or str(entity_id), entity_text, sha256_text(entity_text), {"entity": data, "collection": {"messages_requested": max(0, limit), "messages_seen": seen, "messages_with_text": with_text, "history_seen": seen - search_seen, "history_with_text": with_text - search_with_text, "search_seen": search_seen, "search_with_text": search_with_text, "search_errors": search_errors, "history_errors": history_errors, "resolved_telegram_id": entity_id}, "iocs": extract_iocs(entity_text)}))
+        out.insert(0, Evidence("telegram_api_public_entity", source, now_iso(), data.get("title") or data.get("display_name") or public_username or str(entity_id), entity_text, sha256_text(entity_text), {"entity": data, "collection": {"messages_requested": max(0, limit), "messages_seen": seen, "messages_with_text": with_text, "history_seen": seen - search_seen, "history_with_text": with_text - search_with_text, "search_seen": search_seen, "search_with_text": search_with_text, "search_errors": search_errors, "history_errors": history_errors, "global_author_seen": global_author_seen, "global_author_errors": global_author_errors, "global_reference_seen": global_reference_seen, "resolved_telegram_id": entity_id}, "iocs": extract_iocs(entity_text)}))
     finally:
         await client.disconnect()
     return out
