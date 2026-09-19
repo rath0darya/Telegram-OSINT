@@ -140,6 +140,32 @@ def write_html(report, path):
             for x in messages
         ]
 
+    # Discovery records are intentionally separate from membership/authorship.
+    # A public chat found by search is not proof that the target joined it.
+    discovered_chat_rows = []
+    for e in report.get("evidence", []):
+        if e.get("source_type") != "telegram_public_chat_discovery":
+            continue
+        m = e.get("metadata") or {}
+        chat = m.get("chat") or {}
+        discovered_chat_rows.append({
+            "chat": chat.get("title") or chat.get("username") or chat.get("id") or "Unknown",
+            "username": ("@" + str(chat.get("username")).lstrip("@")) if chat.get("username") else "—",
+            "how": "discovered · " + str(m.get("discovery_method") or "search"),
+            "date": e.get("collected_at") or "—",
+        })
+    if discovered_chat_rows:
+        seen = set()
+        discovered_chat_rows = [
+            x for x in discovered_chat_rows
+            if (x["chat"], x["username"]) not in seen
+            and not seen.add((x["chat"], x["username"]))
+        ]
+        group_rows = group_rows + [
+            x for x in discovered_chat_rows
+            if (x["chat"], x["username"]) not in {(g["chat"], g["username"]) for g in group_rows}
+        ]
+
     chat_counter = Counter(chat_name(x) for x in messages)
     chat_rows = [{"chat": k, "count": v} for k, v in chat_counter.most_common()]
 
@@ -350,7 +376,7 @@ table{{width:100%;border-collapse:collapse;font-size:13.5px}}th{{background:var(
 
 <details class="card sect" id="chats" open><summary class="head"><i class="chev"></i><span class="t">Messages by chat</span><b class="n">{len(chat_rows)}</b><span class="copy" role="button" tabindex="0" title="Copy table">⧉</span></summary><div class="fold"><table><tr><th></th><th>Chat</th><th>Messages</th></tr>{_table(chat_rows, ["chat","count"], ["Chat","Messages"], "chat", "No messages.")}</table></div></details>
 
-<details class="card sect" id="messages" open><summary class="head"><i class="chev"></i><span class="t">Messages</span><b class="n">{len(message_rows)}</b><span class="copy" role="button" tabindex="0" title="Copy table">⧉</span></summary><div class="fold"><table><tr><th></th><th>Message</th><th>Date</th><th>Chat</th></tr>{_table(message_rows, ["message","date","chat"], ["Message","Date","Chat"], "message", "No messages with authorship confirmed by Telegram ID.")}</table><p class="note">A message is attributed to the target only when the author Telegram numeric ID exactly matches the resolved target ID.</p></div></details>
+<details class="card sect" id="messages" open><summary class="head"><i class="chev"></i><span class="t">Messages</span><b class="n">{len(message_rows)}</b><span class="copy" role="button" tabindex="0" title="Copy table">⧉</span></summary><div class="fold"><table><tr><th></th><th>Message</th><th>Date</th><th>Chat</th></tr>{_table(message_rows, ["message","date","chat"], ["Message","Date","Chat"], "message", "No messages with authorship confirmed by Telegram ID.")}</table><p class="note">A message is attributed to the target only when the author Telegram numeric ID exactly matches the resolved target ID. A chat marked “discovered” was found through Telegram search; discovery alone does not prove membership or authorship.</p></div></details>
 
 <div id="indicators">{ioc_section("Target indicators", iocs)}</div>
 <div id="context">{ioc_section("Context indicators", context_iocs)}</div>
