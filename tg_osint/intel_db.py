@@ -164,6 +164,15 @@ class IntelligenceDB:
         self.db.commit()
         return count
 
+    def resolve_identifier(self, identifier_type: str, value: str) -> int | None:
+        """Resolve a previously observed identifier to its stable Telegram ID."""
+        row = self.db.execute(
+            "SELECT e.telegram_id FROM identifiers i JOIN entities e ON e.id=i.entity_id "
+            "WHERE i.identifier_type=? AND lower(i.value)=lower(?) ORDER BY e.last_observed DESC LIMIT 1",
+            (identifier_type, value),
+        ).fetchone()
+        return int(row["telegram_id"]) if row and row["telegram_id"] is not None else None
+
     def search(self, query: str, limit: int = 50) -> list[dict]:
         q = f"%{query.lower()}%"
         rows = self.db.execute("SELECT id,telegram_id,username,display_name,entity_type,first_observed,last_observed FROM entities WHERE lower(COALESCE(username,'')) LIKE ? OR lower(COALESCE(display_name,'')) LIKE ? OR CAST(telegram_id AS TEXT) LIKE ? ORDER BY last_observed DESC LIMIT ?", (q,q,q,limit)).fetchall()
