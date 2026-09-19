@@ -20,9 +20,11 @@ class CoreTests(unittest.TestCase):
 class AnalyzerTests(unittest.TestCase):
     def test_analysis(self):
         from tg_osint.analyzer import analyze_evidence
-        e = Evidence("telegram_public_message", "https://t.me/x/1", "2026-01-01T00:00:00+00:00", "m", "hello #cti @sample_user https://example.com", "x", {"date": "2026-01-01T00:00:00+00:00", "views": 10, "forwards": 2})
-        a = analyze_evidence([e])
+        e = Evidence("telegram_public_message", "https://t.me/x/1", "2026-01-01T00:00:00+00:00", "m", "hello #cti @sample_user https://example.com", "x", {"date": "2026-01-01T00:00:00+00:00", "views": 10, "forwards": 2, "author": {"id": 123}})
+        a = analyze_evidence([e], target_id=123)
         self.assertEqual(a["message_count"], 1)
+        self.assertEqual(a["authored_message_count"], 1)
+        self.assertEqual(a["unattributed_message_count"], 0)
         self.assertIn("@sample_user", a["mentions"])
         self.assertEqual(a["engagement"]["total_views"], 10)
 
