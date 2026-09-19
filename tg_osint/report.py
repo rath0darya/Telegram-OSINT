@@ -179,7 +179,8 @@ h1{{font-size:clamp(2rem,5vw,3rem);line-height:1.05;margin:.2em 0 .35em;letter-s
 <div class="card stat"><span class="muted">Target-authored messages</span><strong>{a.get("authored_message_count",0)}</strong></div>
 <div class="card stat"><span class="muted">Collected messages</span><strong>{a.get("message_count",0)}</strong></div>
 <div class="card stat"><span class="muted">Context references</span><strong>{a.get("non_authored_message_count",0)}</strong></div>
-<div class="card stat"><span class="muted">Observed chats</span><strong>{a.get("chat_count",0)}</strong></div>
+<div class="card stat"><span class="muted">Target-authored chats</span><strong>{a.get("chat_count",0)}</strong></div>
+<div class="card stat"><span class="muted">Context-observed chats</span><strong>{a.get("all_observed_chat_count",0)}</strong></div>
 <div class="card stat"><span class="muted">Observed relationships</span><strong>{len(relationships)}</strong></div>
 <div class="card stat"><span class="muted">Manual report references</span><strong>{len(manual_relationships)}</strong></div>
 </section>
