@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS identifiers (id INTEGER PRIMARY KEY, entity_id INTEGE
 CREATE TABLE IF NOT EXISTS profile_snapshots (id INTEGER PRIMARY KEY, entity_id INTEGER NOT NULL, observed_at TEXT NOT NULL, username TEXT, first_name TEXT, last_name TEXT, display_name TEXT, title TEXT, about TEXT, verified INTEGER, scam INTEGER, fake INTEGER, source_url TEXT, evidence_sha256 TEXT NOT NULL, metadata_json TEXT NOT NULL DEFAULT '{}', UNIQUE(entity_id, observed_at, evidence_sha256));
 CREATE TABLE IF NOT EXISTS chats (id INTEGER PRIMARY KEY, telegram_id INTEGER UNIQUE, username TEXT, title TEXT, chat_type TEXT NOT NULL DEFAULT 'unknown', first_observed TEXT NOT NULL, last_observed TEXT NOT NULL, metadata_json TEXT NOT NULL DEFAULT '{}');
 CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, chat_id INTEGER NOT NULL, telegram_message_id INTEGER NOT NULL, author_entity_id INTEGER, observed_at TEXT NOT NULL, message_date TEXT, text TEXT NOT NULL, source_url TEXT, views INTEGER, forwards INTEGER, reply_to_message_id INTEGER, forward_from_entity_id INTEGER, sha256 TEXT NOT NULL, metadata_json TEXT NOT NULL DEFAULT '{}', UNIQUE(chat_id, telegram_message_id));
+CREATE TABLE IF NOT EXISTS reactions (id INTEGER PRIMARY KEY, message_id INTEGER NOT NULL, reaction TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 0, observed_at TEXT NOT NULL, source_url TEXT, evidence_sha256 TEXT NOT NULL, UNIQUE(message_id,reaction,evidence_sha256));
 CREATE TABLE IF NOT EXISTS memberships (id INTEGER PRIMARY KEY, entity_id INTEGER NOT NULL, chat_id INTEGER NOT NULL, status TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'member', observed_at TEXT NOT NULL, first_observed TEXT NOT NULL, last_observed TEXT NOT NULL, source_url TEXT, evidence_sha256 TEXT NOT NULL, metadata_json TEXT NOT NULL DEFAULT '{}', UNIQUE(entity_id, chat_id, status, role, observed_at, evidence_sha256));
 CREATE TABLE IF NOT EXISTS observations (id INTEGER PRIMARY KEY, entity_id INTEGER, chat_id INTEGER, observed_at TEXT NOT NULL, observation_type TEXT NOT NULL, source_url TEXT, evidence_sha256 TEXT NOT NULL, metadata_json TEXT NOT NULL DEFAULT '{}');
 CREATE TABLE IF NOT EXISTS edges (id INTEGER PRIMARY KEY, source_entity_id INTEGER, target_entity_id INTEGER, source_chat_id INTEGER, message_id INTEGER, edge_type TEXT NOT NULL, observed_at TEXT NOT NULL, source_url TEXT, evidence_sha256 TEXT NOT NULL, metadata_json TEXT NOT NULL DEFAULT '{}', UNIQUE(source_entity_id, target_entity_id, source_chat_id, message_id, edge_type, evidence_sha256));
@@ -37,7 +38,7 @@ class IntelligenceDB:
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
         self._migrate()
-        self.db.executescript("""CREATE INDEX IF NOT EXISTS idx_messages_author ON messages(author_entity_id);""")
+        self.db.executescript("""CREATE INDEX IF NOT EXISTS idx_messages_author ON messages(author_entity_id); CREATE INDEX IF NOT EXISTS idx_reactions_message ON reactions(message_id);""")
         self._ensure_column("identifiers", "observation_count", "INTEGER NOT NULL DEFAULT 1")
         self.db.commit()
 
@@ -132,6 +133,11 @@ class IntelligenceDB:
                     forward_id = self._entity(forward_meta.get("id"), forward_meta.get("username"), forward_meta.get("display_name"), "user", ev.collected_at, forward_meta)
                 msg_id = int(m.get("message_id", 0))
                 self.db.execute("INSERT INTO messages(chat_id,telegram_message_id,author_entity_id,observed_at,message_date,text,source_url,views,forwards,reply_to_message_id,forward_from_entity_id,sha256,metadata_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(chat_id,telegram_message_id) DO UPDATE SET author_entity_id=excluded.author_entity_id, observed_at=excluded.observed_at, message_date=excluded.message_date, text=excluded.text, source_url=excluded.source_url, views=excluded.views, forwards=excluded.forwards, reply_to_message_id=excluded.reply_to_message_id, forward_from_entity_id=excluded.forward_from_entity_id, sha256=excluded.sha256, metadata_json=excluded.metadata_json", (chat, msg_id, author_id, ev.collected_at, m.get("date"), ev.text, ev.source_url, m.get("views"), m.get("forwards"), m.get("reply_to_message_id"), forward_id, ev.sha256, json.dumps(m, sort_keys=True)))
+                stored_message = self.db.execute("SELECT id FROM messages WHERE chat_id=? AND telegram_message_id=?", (chat, msg_id)).fetchone()
+                if stored_message:
+                    for reaction in m.get("reaction_summary", []):
+                        if isinstance(reaction, dict):
+                            self.db.execute("INSERT OR IGNORE INTO reactions(message_id,reaction,count,observed_at,source_url,evidence_sha256) VALUES(?,?,?,?,?,?)", (stored_message["id"], str(reaction.get("reaction") or "unknown"), int(reaction.get("count") or 0), ev.collected_at, ev.source_url, ev.sha256))
                 self.db.execute("INSERT OR IGNORE INTO observations(entity_id,chat_id,observed_at,observation_type,source_url,evidence_sha256,metadata_json) VALUES(?,?,?,?,?,?,?)", (author_id or eid, chat, ev.collected_at, "public_message", ev.source_url, ev.sha256, json.dumps(m, sort_keys=True)))
                 reply_meta = m.get("reply_to_author")
                 if author_id and isinstance(reply_meta, dict):
@@ -169,6 +175,7 @@ class IntelligenceDB:
             "profiles": [dict(r) for r in self.db.execute("SELECT * FROM profile_snapshots WHERE entity_id=? ORDER BY observed_at", (eid,))],
             "memberships": [dict(r) for r in self.db.execute("SELECT m.*,c.telegram_id AS chat_telegram_id,c.username AS chat_username,c.title AS chat_title,c.chat_type FROM memberships m JOIN chats c ON c.id=m.chat_id WHERE m.entity_id=? ORDER BY m.observed_at", (eid,))],
             "messages": [dict(r) for r in self.db.execute("SELECT m.*,c.telegram_id AS chat_telegram_id,c.username AS chat_username,c.title AS chat_title,c.chat_type FROM messages m JOIN chats c ON c.id=m.chat_id WHERE m.author_entity_id=? ORDER BY COALESCE(m.message_date,m.observed_at)", (eid,))],
+            "reactions": [dict(r) for r in self.db.execute("SELECT r.*,m.telegram_message_id,c.telegram_id AS chat_telegram_id,c.username AS chat_username,c.title AS chat_title FROM reactions r JOIN messages m ON m.id=r.message_id JOIN chats c ON c.id=m.chat_id WHERE m.author_entity_id=? ORDER BY r.observed_at", (eid,))],
             "relationships": [dict(r) for r in self.db.execute("SELECT e.*,s.telegram_id AS source_telegram_id,t.telegram_id AS target_telegram_id,t.username AS target_username FROM edges e LEFT JOIN entities s ON s.id=e.source_entity_id LEFT JOIN entities t ON t.id=e.target_entity_id WHERE e.source_entity_id=? OR e.target_entity_id=? ORDER BY e.observed_at", (eid,eid))],
         }
 
