@@ -6,7 +6,7 @@ from typing import Any
 
 from .core import Evidence, extract_iocs, now_iso, sha256_text
 
-async def _collect(username: str, limit: int = 0) -> list[Evidence]:
+async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
     from telethon import TelegramClient
 
     api_id = os.getenv("TELEGRAM_API_ID")
@@ -19,7 +19,8 @@ async def _collect(username: str, limit: int = 0) -> list[Evidence]:
     await client.start()
     out: list[Evidence] = []
     try:
-        entity = await client.get_entity(username)
+        entity = await client.get_entity(target)
+        username = getattr(entity, 'username', None) or str(getattr(entity, 'id', target))
         data = {
             "id": getattr(entity, "id", None),
             "username": getattr(entity, "username", None),
@@ -68,5 +69,5 @@ async def _collect(username: str, limit: int = 0) -> list[Evidence]:
         await client.disconnect()
     return out
 
-def collect_public(username: str, limit: int = 0) -> list[Evidence]:
-    return asyncio.run(_collect(username, limit))
+def collect_public(target: str | int, limit: int = 0) -> list[Evidence]:
+    return asyncio.run(_collect(target, limit))
