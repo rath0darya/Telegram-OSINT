@@ -84,12 +84,12 @@ class IntelligenceDB:
         # two numeric IDs because a username happens to be equal/reused.
         row = self._execute("SELECT id FROM entities WHERE telegram_id=?", (int(telegram_id),)).fetchone() if telegram_id is not None else None
         if row is None and telegram_id is None and username:
-            row = self.db.execute("SELECT id FROM entities WHERE lower(username)=lower(?) AND telegram_id IS NULL", (username,)).fetchone()
+            row = self._execute("SELECT id FROM entities WHERE lower(username)=lower(?) AND telegram_id IS NULL", (username,)).fetchone()
         if row:
             eid = row["id"]
-            self.db.execute("UPDATE entities SET telegram_id=COALESCE(?,telegram_id), username=COALESCE(?,username), display_name=COALESCE(?,display_name), entity_type=?, last_observed=?, metadata_json=? WHERE id=?", (telegram_id, username, display_name, entity_type, observed_at, json.dumps(metadata, sort_keys=True), eid))
+            self._execute("UPDATE entities SET telegram_id=COALESCE(?,telegram_id), username=COALESCE(?,username), display_name=COALESCE(?,display_name), entity_type=?, last_observed=?, metadata_json=? WHERE id=?", (telegram_id, username, display_name, entity_type, observed_at, json.dumps(metadata, sort_keys=True), eid))
         else:
-            cur = self.db.execute("INSERT INTO entities(telegram_id,username,display_name,entity_type,first_observed,last_observed,metadata_json) VALUES(?,?,?,?,?,?,?)", (telegram_id, username, display_name, entity_type, observed_at, observed_at, json.dumps(metadata, sort_keys=True)))
+            cur = self._execute("INSERT INTO entities(telegram_id,username,display_name,entity_type,first_observed,last_observed,metadata_json) VALUES(?,?,?,?,?,?,?)", (telegram_id, username, display_name, entity_type, observed_at, observed_at, json.dumps(metadata, sort_keys=True)))
             eid = cur.lastrowid
         self._identifier(eid, "telegram_username", username, observed_at)
         return eid
@@ -97,39 +97,39 @@ class IntelligenceDB:
     def _chat(self, telegram_id, username, title, chat_type, observed_at, metadata):
         # Chat/channel numeric ID is authoritative too; a reused username
         # must never merge two different chats.
-        row = self.db.execute("SELECT id FROM chats WHERE telegram_id=?", (int(telegram_id),)).fetchone() if telegram_id is not None else None
+        row = self._execute("SELECT id FROM chats WHERE telegram_id=?", (int(telegram_id),)).fetchone() if telegram_id is not None else None
         if row is None and telegram_id is None and username:
-            row = self.db.execute("SELECT id FROM chats WHERE lower(username)=lower(?) AND telegram_id IS NULL", (username,)).fetchone()
+            row = self._execute("SELECT id FROM chats WHERE lower(username)=lower(?) AND telegram_id IS NULL", (username,)).fetchone()
         if row:
             cid = row["id"]
-            self.db.execute("UPDATE chats SET username=COALESCE(?,username), title=COALESCE(?,title), chat_type=?, last_observed=?, metadata_json=? WHERE id=?", (username, title, chat_type, observed_at, json.dumps(metadata, sort_keys=True), cid))
+            self._execute("UPDATE chats SET username=COALESCE(?,username), title=COALESCE(?,title), chat_type=?, last_observed=?, metadata_json=? WHERE id=?", (username, title, chat_type, observed_at, json.dumps(metadata, sort_keys=True), cid))
             return cid
-        cur = self.db.execute("INSERT INTO chats(telegram_id,username,title,chat_type,first_observed,last_observed,metadata_json) VALUES(?,?,?,?,?,?,?)", (telegram_id, username, title, chat_type, observed_at, observed_at, json.dumps(metadata, sort_keys=True)))
+        cur = self._execute("INSERT INTO chats(telegram_id,username,title,chat_type,first_observed,last_observed,metadata_json) VALUES(?,?,?,?,?,?,?)", (telegram_id, username, title, chat_type, observed_at, observed_at, json.dumps(metadata, sort_keys=True)))
         return cur.lastrowid
 
     def _identifier(self, entity_id, kind, value, observed_at):
         if entity_id is None or not value:
             return
-        self.db.execute("INSERT INTO identifiers(entity_id,identifier_type,value,first_observed,last_observed,observation_count) VALUES(?,?,?,?,?,1) ON DUPLICATE KEY UPDATE last_observed=VALUES(last_observed), observation_count=identifiers.observation_count+1", (entity_id, kind, value, observed_at, observed_at))
+        self._execute("INSERT INTO identifiers(entity_id,identifier_type,value,first_observed,last_observed,observation_count) VALUES(?,?,?,?,?,1) ON DUPLICATE KEY UPDATE last_observed=VALUES(last_observed), observation_count=identifiers.observation_count+1", (entity_id, kind, value, observed_at, observed_at))
 
     def _snapshot(self, eid, data, observed_at, source_url, evidence_sha):
         display_name = data.get("display_name") or " ".join(x for x in (data.get("first_name"), data.get("last_name")) if x) or data.get("title")
-        self.db.execute("INSERT IGNORE INTO profile_snapshots(entity_id,observed_at,username,first_name,last_name,display_name,title,about,verified,scam,fake,source_url,evidence_sha256,metadata_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (eid, observed_at, data.get("username"), data.get("first_name"), data.get("last_name"), display_name, data.get("title"), data.get("about"), data.get("verified"), data.get("scam"), data.get("fake"), source_url, evidence_sha, json.dumps(data, sort_keys=True)))
+        self._execute("INSERT IGNORE INTO profile_snapshots(entity_id,observed_at,username,first_name,last_name,display_name,title,about,verified,scam,fake,source_url,evidence_sha256,metadata_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (eid, observed_at, data.get("username"), data.get("first_name"), data.get("last_name"), display_name, data.get("title"), data.get("about"), data.get("verified"), data.get("scam"), data.get("fake"), source_url, evidence_sha, json.dumps(data, sort_keys=True)))
         self._identifier(eid, "telegram_username", data.get("username"), observed_at)
         self._identifier(eid, "display_name", display_name, observed_at)
 
     def _edge(self, source, target, chat_id, message_id, edge_type, ev):
         if source is None or target is None:
             return
-        self.db.execute("INSERT IGNORE INTO edges(source_entity_id,target_entity_id,source_chat_id,message_id,edge_type,observed_at,source_url,evidence_sha256,metadata_json) VALUES(?,?,?,?,?,?,?,?,?)", (source, target, chat_id, message_id, edge_type, ev.collected_at, ev.source_url, ev.sha256, json.dumps(ev.metadata or {}, sort_keys=True)))
+        self._execute("INSERT IGNORE INTO edges(source_entity_id,target_entity_id,source_chat_id,message_id,edge_type,observed_at,source_url,evidence_sha256,metadata_json) VALUES(?,?,?,?,?,?,?,?,?)", (source, target, chat_id, message_id, edge_type, ev.collected_at, ev.source_url, ev.sha256, json.dumps(ev.metadata or {}, sort_keys=True)))
 
     def start_run(self, target: str) -> int:
-        cur = self.db.execute("INSERT INTO runs(started_at,target) VALUES(?,?)", (now_iso(), target))
+        cur = self._execute("INSERT INTO runs(started_at,target) VALUES(?,?)", (now_iso(), target))
         self.db.commit()
         return int(cur.lastrowid)
 
     def finish_run(self, run_id: int, count: int):
-        self.db.execute("UPDATE runs SET finished_at=?,evidence_count=? WHERE id=?", (now_iso(), count, run_id))
+        self._execute("UPDATE runs SET finished_at=?,evidence_count=? WHERE id=?", (now_iso(), count, run_id))
         self.db.commit()
 
     def ingest(self, evidence: Iterable[Evidence]) -> int:
@@ -142,7 +142,7 @@ class IntelligenceDB:
                 entity_type = entity_meta.get("entity_type") or ("user" if entity_meta.get("first_name") is not None else "channel_or_group")
                 eid = self._entity(entity_meta.get("id"), entity_meta.get("username"), entity_meta.get("display_name") or entity_meta.get("title") or entity_meta.get("first_name"), entity_type, ev.collected_at, entity_meta)
                 self._snapshot(eid, entity_meta, ev.collected_at, ev.source_url, ev.sha256)
-                self.db.execute("INSERT IGNORE INTO observations(entity_id,observed_at,observation_type,source_url,evidence_sha256,metadata_json) VALUES(?,?,?,?,?,?)", (eid, ev.collected_at, ev.source_type, ev.source_url, ev.sha256, json.dumps(meta, sort_keys=True)))
+                self._execute("INSERT IGNORE INTO observations(entity_id,observed_at,observation_type,source_url,evidence_sha256,metadata_json) VALUES(?,?,?,?,?,?)", (eid, ev.collected_at, ev.source_type, ev.source_url, ev.sha256, json.dumps(meta, sort_keys=True)))
 
             if ev.source_type == "telegram_public_message":
                 m = meta
@@ -158,13 +158,13 @@ class IntelligenceDB:
                 if forward_meta:
                     forward_id = self._entity(forward_meta.get("id"), forward_meta.get("username"), forward_meta.get("display_name"), "user", ev.collected_at, forward_meta)
                 msg_id = int(m.get("message_id", 0))
-                self.db.execute("INSERT INTO messages(chat_id,telegram_message_id,author_entity_id,observed_at,message_date,text,source_url,views,forwards,reply_to_message_id,forward_from_entity_id,sha256,metadata_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE author_entity_id=VALUES(author_entity_id), observed_at=VALUES(observed_at), message_date=VALUES(message_date), text=VALUES(text), source_url=VALUES(source_url), views=VALUES(views), forwards=VALUES(forwards), reply_to_message_id=VALUES(reply_to_message_id), forward_from_entity_id=VALUES(forward_from_entity_id), sha256=VALUES(sha256), metadata_json=VALUES(metadata_json)", (chat, msg_id, author_id, ev.collected_at, m.get("date"), ev.text, ev.source_url, m.get("views"), m.get("forwards"), m.get("reply_to_message_id"), forward_id, ev.sha256, json.dumps(m, sort_keys=True)))
-                stored_message = self.db.execute("SELECT id FROM messages WHERE chat_id=? AND telegram_message_id=?", (chat, msg_id)).fetchone()
+                self._execute("INSERT INTO messages(chat_id,telegram_message_id,author_entity_id,observed_at,message_date,text,source_url,views,forwards,reply_to_message_id,forward_from_entity_id,sha256,metadata_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE author_entity_id=VALUES(author_entity_id), observed_at=VALUES(observed_at), message_date=VALUES(message_date), text=VALUES(text), source_url=VALUES(source_url), views=VALUES(views), forwards=VALUES(forwards), reply_to_message_id=VALUES(reply_to_message_id), forward_from_entity_id=VALUES(forward_from_entity_id), sha256=VALUES(sha256), metadata_json=VALUES(metadata_json)", (chat, msg_id, author_id, ev.collected_at, m.get("date"), ev.text, ev.source_url, m.get("views"), m.get("forwards"), m.get("reply_to_message_id"), forward_id, ev.sha256, json.dumps(m, sort_keys=True)))
+                stored_message = self._execute("SELECT id FROM messages WHERE chat_id=? AND telegram_message_id=?", (chat, msg_id)).fetchone()
                 if stored_message:
                     for reaction in m.get("reaction_summary", []):
                         if isinstance(reaction, dict):
-                            self.db.execute("INSERT IGNORE INTO reactions(message_id,reaction,count,observed_at,source_url,evidence_sha256) VALUES(?,?,?,?,?,?)", (stored_message["id"], str(reaction.get("reaction") or "unknown"), int(reaction.get("count") or 0), ev.collected_at, ev.source_url, ev.sha256))
-                self.db.execute("INSERT IGNORE INTO observations(entity_id,chat_id,observed_at,observation_type,source_url,evidence_sha256,metadata_json) VALUES(?,?,?,?,?,?,?)", (author_id or eid, chat, ev.collected_at, "public_message", ev.source_url, ev.sha256, json.dumps(m, sort_keys=True)))
+                            self._execute("INSERT IGNORE INTO reactions(message_id,reaction,count,observed_at,source_url,evidence_sha256) VALUES(?,?,?,?,?,?)", (stored_message["id"], str(reaction.get("reaction") or "unknown"), int(reaction.get("count") or 0), ev.collected_at, ev.source_url, ev.sha256))
+                self._execute("INSERT IGNORE INTO observations(entity_id,chat_id,observed_at,observation_type,source_url,evidence_sha256,metadata_json) VALUES(?,?,?,?,?,?,?)", (author_id or eid, chat, ev.collected_at, "public_message", ev.source_url, ev.sha256, json.dumps(m, sort_keys=True)))
                 reply_meta = m.get("reply_to_author")
                 if author_id and isinstance(reply_meta, dict):
                     reply_id = self._entity(reply_meta.get("id"), reply_meta.get("username"), reply_meta.get("display_name"), "user", ev.collected_at, reply_meta)
@@ -183,14 +183,14 @@ class IntelligenceDB:
             if isinstance(membership, dict) and eid:
                 cm = membership.get("chat") if isinstance(membership.get("chat"), dict) else {}
                 cid = self._chat(cm.get("id"), cm.get("username"), cm.get("title"), cm.get("type") or "unknown", ev.collected_at, cm)
-                self.db.execute("INSERT IGNORE INTO memberships(entity_id,chat_id,status,role,observed_at,first_observed,last_observed,source_url,evidence_sha256,metadata_json) VALUES(?,?,?,?,?,?,?,?,?,?)", (eid, cid, membership.get("status","unknown"), membership.get("role","member"), ev.collected_at, ev.collected_at, ev.collected_at, ev.source_url, ev.sha256, json.dumps(membership, sort_keys=True)))
+                self._execute("INSERT IGNORE INTO memberships(entity_id,chat_id,status,role,observed_at,first_observed,last_observed,source_url,evidence_sha256,metadata_json) VALUES(?,?,?,?,?,?,?,?,?,?)", (eid, cid, membership.get("status","unknown"), membership.get("role","member"), ev.collected_at, ev.collected_at, ev.collected_at, ev.source_url, ev.sha256, json.dumps(membership, sort_keys=True)))
             count += 1
         self.db.commit()
         return count
 
     def resolve_identifier(self, identifier_type: str, value: str) -> int | None:
         """Resolve a previously observed identifier to its stable Telegram ID."""
-        row = self.db.execute(
+        row = self._execute(
             "SELECT e.telegram_id FROM identifiers i JOIN entities e ON e.id=i.entity_id "
             "WHERE i.identifier_type=? AND lower(i.value)=lower(?) ORDER BY e.last_observed DESC LIMIT 1",
             (identifier_type, value),
@@ -199,22 +199,22 @@ class IntelligenceDB:
 
     def search(self, query: str, limit: int = 50) -> list[dict]:
         q = f"%{query.lower()}%"
-        rows = self.db.execute("SELECT id,telegram_id,username,display_name,entity_type,first_observed,last_observed FROM entities WHERE lower(COALESCE(username,'')) LIKE ? OR lower(COALESCE(display_name,'')) LIKE ? OR CAST(telegram_id AS TEXT) LIKE ? ORDER BY last_observed DESC LIMIT ?", (q,q,q,limit)).fetchall()
+        rows = self._execute("SELECT id,telegram_id,username,display_name,entity_type,first_observed,last_observed FROM entities WHERE lower(COALESCE(username,'')) LIKE ? OR lower(COALESCE(display_name,'')) LIKE ? OR CAST(telegram_id AS TEXT) LIKE ? ORDER BY last_observed DESC LIMIT ?", (q,q,q,limit)).fetchall()
         return [dict(r) for r in rows]
 
     def entity_history(self, telegram_id: int) -> dict:
-        entity = self.db.execute("SELECT * FROM entities WHERE telegram_id=?", (telegram_id,)).fetchone()
+        entity = self._execute("SELECT * FROM entities WHERE telegram_id=?", (telegram_id,)).fetchone()
         if not entity:
             return {}
         eid = entity["id"]
         return {
             "entity": dict(entity),
-            "identifiers": [dict(r) for r in self.db.execute("SELECT * FROM identifiers WHERE entity_id=? ORDER BY first_observed", (eid,))],
-            "profiles": [dict(r) for r in self.db.execute("SELECT * FROM profile_snapshots WHERE entity_id=? ORDER BY observed_at", (eid,))],
-            "memberships": [dict(r) for r in self.db.execute("SELECT m.*,c.telegram_id AS chat_telegram_id,c.username AS chat_username,c.title AS chat_title,c.chat_type FROM memberships m JOIN chats c ON c.id=m.chat_id WHERE m.entity_id=? ORDER BY m.observed_at", (eid,))],
-            "messages": [dict(r) for r in self.db.execute("SELECT m.*,c.telegram_id AS chat_telegram_id,c.username AS chat_username,c.title AS chat_title,c.chat_type FROM messages m JOIN chats c ON c.id=m.chat_id WHERE m.author_entity_id=? ORDER BY COALESCE(m.message_date,m.observed_at)", (eid,))],
-            "reactions": [dict(r) for r in self.db.execute("SELECT r.*,m.telegram_message_id,c.telegram_id AS chat_telegram_id,c.username AS chat_username,c.title AS chat_title FROM reactions r JOIN messages m ON m.id=r.message_id JOIN chats c ON c.id=m.chat_id WHERE m.author_entity_id=? ORDER BY r.observed_at", (eid,))],
-            "relationships": [dict(r) for r in self.db.execute("SELECT e.*,s.telegram_id AS source_telegram_id,t.telegram_id AS target_telegram_id,t.username AS target_username FROM edges e LEFT JOIN entities s ON s.id=e.source_entity_id LEFT JOIN entities t ON t.id=e.target_entity_id WHERE e.source_entity_id=? OR e.target_entity_id=? ORDER BY e.observed_at", (eid,eid))],
+            "identifiers": [dict(r) for r in self._execute("SELECT * FROM identifiers WHERE entity_id=? ORDER BY first_observed", (eid,))],
+            "profiles": [dict(r) for r in self._execute("SELECT * FROM profile_snapshots WHERE entity_id=? ORDER BY observed_at", (eid,))],
+            "memberships": [dict(r) for r in self._execute("SELECT m.*,c.telegram_id AS chat_telegram_id,c.username AS chat_username,c.title AS chat_title,c.chat_type FROM memberships m JOIN chats c ON c.id=m.chat_id WHERE m.entity_id=? ORDER BY m.observed_at", (eid,))],
+            "messages": [dict(r) for r in self._execute("SELECT m.*,c.telegram_id AS chat_telegram_id,c.username AS chat_username,c.title AS chat_title,c.chat_type FROM messages m JOIN chats c ON c.id=m.chat_id WHERE m.author_entity_id=? ORDER BY COALESCE(m.message_date,m.observed_at)", (eid,))],
+            "reactions": [dict(r) for r in self._execute("SELECT r.*,m.telegram_message_id,c.telegram_id AS chat_telegram_id,c.username AS chat_username,c.title AS chat_title FROM reactions r JOIN messages m ON m.id=r.message_id JOIN chats c ON c.id=m.chat_id WHERE m.author_entity_id=? ORDER BY r.observed_at", (eid,))],
+            "relationships": [dict(r) for r in self._execute("SELECT e.*,s.telegram_id AS source_telegram_id,t.telegram_id AS target_telegram_id,t.username AS target_username FROM edges e LEFT JOIN entities s ON s.id=e.source_entity_id LEFT JOIN entities t ON t.id=e.target_entity_id WHERE e.source_entity_id=? OR e.target_entity_id=? ORDER BY e.observed_at", (eid,eid))],
         }
 
     def close(self):
