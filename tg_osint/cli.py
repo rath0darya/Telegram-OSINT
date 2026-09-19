@@ -101,6 +101,8 @@ def main():
     if collection:
         print(f"API messages: requested={collection.get('messages_requested', 0)} seen={collection.get('messages_seen', 0)} with_text={collection.get('messages_with_text', 0)}")
         print(f"Resolved ID : {collection.get('resolved_telegram_id')}")
+    if not ev and not errors:
+        errors.append("No evidence was produced; Telegram entity resolution did not return data.")
     if errors:
         print("\nWarnings:")
         for x in errors:
