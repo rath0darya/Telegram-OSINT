@@ -130,14 +130,34 @@ def write_html(report, path):
 
     evidence_cards = []
     for i, e in enumerate(report["evidence"], 1):
+        metadata = e.get("metadata") or {}
+        author = metadata.get("author") if isinstance(metadata.get("author"), dict) else {}
+        author_id = author.get("id")
+        exact_target_author = (
+            e.get("source_type") == "telegram_public_message"
+            and resolved is not None
+            and author_id is not None
+            and str(author_id) == str(resolved)
+        )
+        if e.get("source_type") == "telegram_public_message":
+            mapping_label = (
+                '<div class="meta"><span>Target mapping</span><strong>EXACT AUTHOR ID MATCH — attributed to target</strong></div>'
+                if exact_target_author else
+                '<div class="meta"><span>Target mapping</span><strong>NO — context only; different/unknown author ID</strong></div>'
+            )
+            ids = f'<div class="meta"><span>Raw Telegram IDs</span><code>message={_e(metadata.get("message_id"))} · chat={_e((metadata.get("chat") or {}).get("id"))} · author={_e(author_id)}</code></div>'
+        else:
+            mapping_label = '<div class="meta"><span>Target mapping</span><strong>IDENTITY/PROFILE EVIDENCE — not a message authorship claim</strong></div>'
+            ids = ""
         evidence_cards.append(f'''<details class="evidence">
 <summary><strong>{_e(e.get("title") or "Evidence")}</strong><span class="muted">#{i} · {_e(e.get("source_type"))}</span></summary>
 <div class="evidence-body"><a href="{_e(e.get("source_url"))}" rel="noopener noreferrer">{_e(e.get("source_url"))}</a>
 <div class="meta"><span>Collected</span><strong>{_e(e.get("collected_at"))}</strong></div>
-{f'<div class="meta"><span>Raw Telegram IDs</span><code>message={_e((e.get("metadata") or {}).get("message_id"))} · chat={_e(((e.get("metadata") or {}).get("chat") or {}).get("id"))} · author={_e(((e.get("metadata") or {}).get("author") or {}).get("id"))}</code></div>' if e.get("source_type") == "telegram_public_message" else ""}
+{mapping_label}
+{ids}
 <pre>{_e(e.get("text",""))}</pre>
 <div class="meta"><span>SHA-256</span><code>{_e(e.get("sha256"))}</code></div>
-<details><summary>Raw metadata — unchanged source fields</summary><pre>{_e(e.get("metadata",{}))}</pre></details></div></details>''')
+<details><summary>Raw metadata — collected fields</summary><pre>{_e(e.get("metadata",{}))}</pre></details></div></details>''')
 
     warnings = "".join(f"<li>{_e(x)}</li>" for x in report["errors"])
     current_username = entity.get("username")
