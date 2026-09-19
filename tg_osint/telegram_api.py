@@ -8,6 +8,11 @@ from typing import Any
 from .core import Evidence, extract_iocs, now_iso, sha256_text
 
 
+def _utf16_slice(text: str, offset: int, length: int) -> str:
+    raw = text.encode("utf-16-le")
+    return raw[offset * 2:(offset + length) * 2].decode("utf-16-le", errors="ignore")
+
+
 def _entity_data(entity: Any) -> dict:
     first = getattr(entity, "first_name", None)
     last = getattr(entity, "last_name", None)
@@ -62,14 +67,21 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
 
         seen = 0
         with_text = 0
+        search_seen = 0
+        search_with_text = 0
+        search_errors = []
 
         async def collect_one(msg, search_context=False):
-            nonlocal seen, with_text
+            nonlocal seen, with_text, search_seen, search_with_text
             seen += 1
+            if search_context:
+                search_seen += 1
             body = msg.message or ""
             if not body:
                 return
             with_text += 1
+            if search_context:
+                search_with_text += 1
 
             author = None
             try:
@@ -109,7 +121,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                 elif ent.__class__.__name__.lower().endswith("messageentitymention"):
                     offset = getattr(ent, "offset", 0)
                     length = getattr(ent, "length", 0)
-                    token = body[offset:offset + length]
+                    token = _utf16_slice(body, offset, length)
                     if re.fullmatch(r"@[A-Za-z0-9_]{5,32}", token):
                         mentions.append({"username": token[1:]})
 
@@ -127,10 +139,24 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                 if chat_username
                 else f"telegram://message/{chat_data.get('id')}/{msg.id}"
             )
+            reaction_summary = []
+            try:
+                for reaction in getattr(getattr(msg, "reactions", None), "results", None) or []:
+                    reaction_obj = getattr(reaction, "reaction", None)
+                    reaction_value = getattr(reaction_obj, "emoticon", None) or getattr(reaction_obj, "document_id", None) or type(reaction_obj).__name__
+                    reaction_summary.append({"reaction": reaction_value, "count": getattr(reaction, "count", 0)})
+            except Exception:
+                reaction_summary = []
             payload = {
                 "message_id": msg.id,
                 "date": msg.date.isoformat() if msg.date else None,
+                "edit_date": msg.edit_date.isoformat() if getattr(msg, "edit_date", None) else None,
                 "text": body[:20000],
+                "grouped_id": getattr(msg, "grouped_id", None),
+                "post_author": getattr(msg, "post_author", None),
+                "via_bot_id": getattr(msg, "via_bot_id", None),
+                "media_type": type(getattr(msg, "media", None)).__name__ if getattr(msg, "media", None) is not None else None,
+                "reaction_summary": reaction_summary,
                 "views": getattr(msg, "views", None),
                 "forwards": getattr(msg, "forwards", None),
                 "chat": chat_data,
@@ -140,6 +166,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                 "forward_from": forward_from,
                 "mentions": mentions,
                 "search_context": search_context,
+                "resolved_target_id": entity_id,
             }
             out.append(
                 Evidence(
@@ -170,7 +197,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
 
         source = f"https://t.me/{public_username}" if public_username else f"telegram://id/{entity_id}"
         entity_text = str(data)
-        out.insert(0, Evidence("telegram_api_public_entity", source, now_iso(), data.get("title") or data.get("display_name") or public_username or str(entity_id), entity_text, sha256_text(entity_text), {"entity": data, "collection": {"messages_requested": max(0, limit), "messages_seen": seen, "messages_with_text": with_text, "resolved_telegram_id": entity_id}, "iocs": extract_iocs(entity_text)}))
+        out.insert(0, Evidence("telegram_api_public_entity", source, now_iso(), data.get("title") or data.get("display_name") or public_username or str(entity_id), entity_text, sha256_text(entity_text), {"entity": data, "collection": {"messages_requested": max(0, limit), "messages_seen": seen, "messages_with_text": with_text, "history_seen": seen - search_seen, "history_with_text": with_text - search_with_text, "search_seen": search_seen, "search_with_text": search_with_text, "search_errors": search_errors, "resolved_telegram_id": entity_id}, "iocs": extract_iocs(entity_text)}))
     finally:
         await client.disconnect()
     return out
