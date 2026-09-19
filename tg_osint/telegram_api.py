@@ -33,6 +33,15 @@ def _entity_data(entity: Any) -> dict:
     }
 
 
+def _message_author_matches_target(msg: Any, target_id: int) -> bool:
+    """Strict authorship gate: only the exact Telegram numeric ID is accepted."""
+    author_id = getattr(msg, "sender_id", None)
+    try:
+        return author_id is not None and int(author_id) == int(target_id)
+    except (TypeError, ValueError):
+        return False
+
+
 def _chat_data(entity: Any) -> dict:
     kind = type(entity).__name__.lower()
     if "channel" in kind:
@@ -79,7 +88,11 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
         id_dialog_scan_errors = []
         stored_message_keys = set()
 
-        async def collect_one(msg, search_context=False):
+        async def collect_one(msg, search_context=False, target_author_only=False):
+            # Search/discovery APIs return surrounding context. Never persist a
+            # message from another Telegram ID as target evidence.
+            if target_author_only and not _message_author_matches_target(msg, int(entity_id)):
+                return False
             nonlocal seen, with_text, search_seen, search_with_text
             key = (getattr(msg, "chat_id", None), getattr(msg, "id", None))
             if key in stored_message_keys:
@@ -190,12 +203,13 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                     {**payload, "iocs": extract_iocs(body)},
                 )
             )
+            return True
 
         history_errors = []
 
         async def collect_history():
             async for msg in client.iter_messages(entity, limit=limit):
-                await collect_one(msg)
+                await collect_one(msg, target_author_only=True)
 
         global_author_seen = 0
         global_author_errors = []
@@ -216,7 +230,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                 ):
                     local_seen += 1
                     global_author_seen += 1
-                    await collect_one(msg, search_context=False)
+                    await collect_one(msg, search_context=False, target_author_only=True)
                 return local_seen
             except Exception as exc:
                 raise RuntimeError(
@@ -250,7 +264,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                         local_count += 1
                         chat_scan_seen += 1
                         before = len(out)
-                        await collect_one(msg, search_context=False)
+                        await collect_one(msg, search_context=False, target_author_only=True)
                         if len(out) > before:
                             author = (out[-1].metadata or {}).get("author")
                             if isinstance(author, dict) and author.get("id") == int(entity_id):
@@ -278,7 +292,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                         continue
                     seen_keys.add(key)
                     global_reference_seen += 1
-                    await collect_one(msg, search_context=True)
+                    await collect_one(msg, search_context=True, target_author_only=True)
 
         async def discover_public_chats():
             nonlocal discovered_chats
@@ -326,7 +340,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                     async for msg in client.iter_messages(chat_entity, limit=remaining):
                         scanned_here += 1
                         before = len(out)
-                        await collect_one(msg, search_context=False)
+                        await collect_one(msg, search_context=False, target_author_only=True)
                         chat_scan_seen += 1
                         remaining -= 1
                         # Count only newly stored messages whose sender is the
@@ -430,7 +444,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
 
         source = f"https://t.me/{public_username}" if public_username else f"telegram://id/{entity_id}"
         entity_text = str(data)
-        out.insert(0, Evidence("telegram_api_public_entity", source, now_iso(), data.get("title") or data.get("display_name") or public_username or str(entity_id), entity_text, sha256_text(entity_text), {"entity": data, "collection": {"messages_requested": max(0, limit), "messages_seen": seen, "messages_with_text": with_text, "history_seen": seen - search_seen, "history_with_text": with_text - search_with_text, "search_seen": search_seen, "search_with_text": search_with_text, "search_errors": search_errors, "history_errors": history_errors, "global_author_seen": global_author_seen, "global_author_errors": global_author_errors, "global_reference_seen": global_reference_seen, "discovered_chat_count": len(discovered_chats), "chat_scan_seen": chat_scan_seen, "chat_scan_matches": chat_scan_matches, "membership_observations": membership_observations, "accessible_public_dialogs": accessible_public_dialogs, "id_dialog_scan_errors": id_dialog_scan_errors, "discovery_errors": discovery_errors, "resolved_telegram_id": entity_id, "identity_collection_mode": "telegram_numeric_id_first"}, "iocs": extract_iocs(entity_text)}))
+        out.insert(0, Evidence("telegram_api_public_entity", source, now_iso(), data.get("title") or data.get("display_name") or public_username or str(entity_id), entity_text, sha256_text(entity_text), {"entity": data, "collection": {"messages_requested": max(0, limit), "messages_seen": seen, "messages_with_text": with_text, "history_seen": seen - search_seen, "history_with_text": with_text - search_with_text, "search_seen": search_seen, "search_with_text": search_with_text, "search_errors": search_errors, "history_errors": history_errors, "global_author_seen": global_author_seen, "global_author_errors": global_author_errors, "global_reference_seen": global_reference_seen, "discovered_chat_count": len(discovered_chats), "chat_scan_seen": chat_scan_seen, "chat_scan_matches": chat_scan_matches, "membership_observations": membership_observations, "accessible_public_dialogs": accessible_public_dialogs, "id_dialog_scan_errors": id_dialog_scan_errors, "discovery_errors": discovery_errors, "resolved_telegram_id": entity_id, "identity_collection_mode": "telegram_numeric_id_first", "message_collection_rule": "exact_target_author_telegram_id_only"}, "iocs": extract_iocs(entity_text)}))
     finally:
         await client.disconnect()
     return out
