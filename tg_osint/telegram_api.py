@@ -260,14 +260,18 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
             if not queries:
                 return 0
 
-            target_input = _target_input_peer(entity, int(entity_id), types)
             total = 0
             for query in queries:
                 try:
+                    # Do not pass from_user to the global search request. In
+                    # some Telethon/Telegram combinations that makes the
+                    # global request try to serialize InputPeerEmpty. The
+                    # query is only an index accelerator; collect_one() still
+                    # enforces the exact numeric sender ID, so a username/name
+                    # hit can never become target evidence by itself.
                     async for msg in client.iter_messages(
                         None,
                         search=query,
-                        from_user=target_input,
                         limit=min(limit, 3000),
                     ):
                         total += 1
