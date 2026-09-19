@@ -19,7 +19,7 @@ def build_report(target, case_id, evidence, errors, analysis=None, intel=None):
     )
     history = intel.entity_history(int(resolved_id)) if intel is not None and resolved_id is not None else {}
     return {
-        "schema_version": "1.7.0",
+        "schema_version": "1.9.0",
         "tool": "Telegram-OSINT",
         "generated_at": now_iso(),
         "case_id": case_id,
