@@ -50,7 +50,7 @@ class IntelligenceDB:
 
     def _execute(self, sql: str, params=()):
         cur = self.db.cursor()
-        cur.execute(sql, params)
+        cur.execute(sql.replace("?", "%s"), params)
         return cur
 
     def _ensure_column(self, table: str, column: str, ddl: str):
