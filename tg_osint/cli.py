@@ -118,7 +118,8 @@ def main():
             print(f"History warning: {history_error}")
         for search_error in collection.get("search_errors", []):
             print(f"Search warning: {search_error}")
-        print(f"Resolved ID : {collection.get('resolved_telegram_id')}")\n        print("Identity rule: exact Telegram ID match only; username/name/text matches remain contextual.")
+        print(f"Resolved ID : {collection.get('resolved_telegram_id')}")
+        print("Identity rule: exact Telegram ID match only; username/name/text matches remain contextual.")
     if not ev and not errors:
         errors.append("No evidence was produced; Telegram entity resolution did not return data.")
     if errors:
