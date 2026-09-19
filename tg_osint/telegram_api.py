@@ -2,9 +2,43 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 from typing import Any
 
 from .core import Evidence, extract_iocs, now_iso, sha256_text
+
+
+def _entity_data(entity: Any) -> dict:
+    first = getattr(entity, "first_name", None)
+    last = getattr(entity, "last_name", None)
+    title = getattr(entity, "title", None)
+    username = getattr(entity, "username", None)
+    return {
+        "id": getattr(entity, "id", None),
+        "username": username,
+        "title": title,
+        "first_name": first,
+        "last_name": last,
+        "display_name": title or " ".join(x for x in (first, last) if x) or username,
+        "about": getattr(entity, "about", None),
+        "verified": getattr(entity, "verified", None),
+        "scam": getattr(entity, "scam", None),
+        "fake": getattr(entity, "fake", None),
+        "entity_type": type(entity).__name__,
+    }
+
+
+def _chat_data(entity: Any) -> dict:
+    kind = type(entity).__name__.lower()
+    if "channel" in kind:
+        chat_type = "channel" if getattr(entity, "broadcast", False) else "supergroup"
+    elif "chat" in kind:
+        chat_type = "group"
+    elif "user" in kind:
+        chat_type = "user"
+    else:
+        chat_type = "unknown"
+    return {"id": getattr(entity, "id", None), "username": getattr(entity, "username", None), "title": getattr(entity, "title", None), "type": chat_type}
 
 
 async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
@@ -23,76 +57,80 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
         entity = await client.get_entity(target)
         entity_id = getattr(entity, "id", target)
         public_username = getattr(entity, "username", None)
-        handle = f"@{public_username}" if public_username else str(entity_id)
+        data = _entity_data(entity)
+        data["resolved_from"] = str(target)
 
-        data = {
-            "id": entity_id,
-            "username": public_username,
-            "title": getattr(entity, "title", None),
-            "first_name": getattr(entity, "first_name", None),
-            "last_name": getattr(entity, "last_name", None),
-            "about": getattr(entity, "about", None),
-            "verified": getattr(entity, "verified", None),
-            "scam": getattr(entity, "scam", None),
-            "fake": getattr(entity, "fake", None),
-        }
-
-        message_count_seen = 0
-        message_count_with_text = 0
-
+        seen = 0
+        with_text = 0
         if limit > 0:
-            async for msg in client.iter_messages(entity, limit=min(limit, 100)):
-                message_count_seen += 1
+            async for msg in client.iter_messages(entity, limit=limit):
+                seen += 1
                 body = msg.message or ""
                 if not body:
                     continue
+                with_text += 1
 
-                message_count_with_text += 1
+                author = None
+                try:
+                    sender = await msg.get_sender()
+                    if sender is not None:
+                        author = _entity_data(sender)
+                except Exception:
+                    pass
+
+                forward_from = None
+                try:
+                    sender_id = getattr(getattr(msg, "forward", None), "sender_id", None)
+                    if sender_id:
+                        sender = await client.get_entity(sender_id)
+                        forward_from = _entity_data(sender)
+                except Exception:
+                    pass
+
+                reply_to_author = None
+                try:
+                    reply = await msg.get_reply_message()
+                    if reply is not None:
+                        sender = await reply.get_sender()
+                        if sender is not None:
+                            reply_to_author = _entity_data(sender)
+                except Exception:
+                    pass
+
+                mentions = []
+                for ent in getattr(msg, "entities", None) or []:
+                    if hasattr(ent, "user_id"):
+                        try:
+                            mentioned = await client.get_entity(ent.user_id)
+                            mentions.append(_entity_data(mentioned))
+                        except Exception:
+                            pass
+                    elif ent.__class__.__name__.lower().endswith("messageentitymention"):
+                        offset = getattr(ent, "offset", 0)
+                        length = getattr(ent, "length", 0)
+                        token = body[offset:offset + length]
+                        if re.fullmatch(r"@[A-Za-z0-9_]{5,32}", token):
+                            mentions.append({"username": token[1:]})
+
                 payload = {
                     "message_id": msg.id,
                     "date": msg.date.isoformat() if msg.date else None,
                     "text": body[:20000],
                     "views": getattr(msg, "views", None),
                     "forwards": getattr(msg, "forwards", None),
+                    "chat": _chat_data(entity),
+                    "author": author,
+                    "reply_to_message_id": getattr(getattr(msg, "reply_to", None), "reply_to_msg_id", None),
+                    "reply_to_author": reply_to_author,
+                    "forward_from": forward_from,
+                    "mentions": mentions,
                 }
-                raw = str(payload)
-                out.append(Evidence(
-                    source_type="telegram_public_message",
-                    source_url=(
-                        f"https://t.me/{public_username}/{msg.id}"
-                        if public_username
-                        else f"telegram://id/{entity_id}/{msg.id}"
-                    ),
-                    collected_at=now_iso(),
-                    title=f"Public message {msg.id}",
-                    text=body[:20000],
-                    sha256=sha256_text(raw),
-                    metadata={**payload, "iocs": extract_iocs(body)},
-                ))
+                source = f"https://t.me/{public_username}/{msg.id}" if public_username else f"telegram://id/{entity_id}/{msg.id}"
+                out.append(Evidence("telegram_public_message", source, now_iso(), f"Public message {msg.id}", body[:20000], sha256_text(str(payload)), {**payload, "iocs": extract_iocs(body)}))
 
+        source = f"https://t.me/{public_username}" if public_username else f"telegram://id/{entity_id}"
         entity_text = str(data)
-        entity_source = (
-            f"https://t.me/{public_username}"
-            if public_username
-            else f"telegram://id/{entity_id}"
-        )
-        out.insert(0, Evidence(
-            source_type="telegram_api_public_entity",
-            source_url=entity_source,
-            collected_at=now_iso(),
-            title=data.get("title") or public_username or str(entity_id),
-            text=entity_text,
-            sha256=sha256_text(entity_text),
-            metadata={
-                "entity": data,
-                "collection": {
-                    "messages_requested": max(0, min(limit, 100)),
-                    "messages_seen": message_count_seen,
-                    "messages_with_text": message_count_with_text,
-                },
-                "iocs": extract_iocs(entity_text),
-            },
-        ))
+        out.insert(0, Evidence("telegram_api_public_entity", source, now_iso(), data.get("title") or data.get("display_name") or public_username or str(entity_id), entity_text, sha256_text(entity_text), {"entity": data, "collection": {"messages_requested": max(0, limit), "messages_seen": seen, "messages_with_text": with_text, "resolved_telegram_id": entity_id}, "iocs": extract_iocs(entity_text)}))
     finally:
         await client.disconnect()
     return out
