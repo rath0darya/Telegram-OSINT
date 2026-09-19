@@ -40,7 +40,7 @@ Membership/admin information is recorded only when Telegram actually exposes the
 - Maintain evidence-backed relationship edges and deterministic SHA-256 provenance
 - Build observed mentioned/replied/forwarded relationship edges
 - Store membership observations supplied by collection code
-- Persistent SQLite historical intelligence database
+- Persistent MariaDB historical intelligence database
 - Search by username, name or Telegram ID
 - Standalone HTML investigation reports containing their own collected evidence
 - Expandable raw evidence and metadata
@@ -51,11 +51,25 @@ Membership/admin information is recorded only when Telegram actually exposes the
 ## Termux install
 
     pkg update
-    pkg install python -y
+    pkg update && pkg upgrade -y
+    pkg install mariadb python -y
     git clone https://github.com/rath0darya/Telegram-OSINT
     cd Telegram-OSINT
     python -m pip install -r requirements.txt
     chmod +x tg-osint
+
+Start MariaDB in Termux (first setup):
+    mariadb-install-db
+    mysqld_safe -u root &
+
+The Python collector uses MariaDB by default:
+    TELEGRAM_OSINT_DB_HOST=127.0.0.1
+    TELEGRAM_OSINT_DB_PORT=3306
+    TELEGRAM_OSINT_DB_USER=root
+    TELEGRAM_OSINT_DB_PASSWORD=
+    TELEGRAM_OSINT_DB_NAME=telegram_osint
+
+Put these values in the local .env when your MariaDB account differs. The application creates the database and its tables automatically when the configured MariaDB account has permission to create databases.
 
 Optional Telegram API access uses TELEGRAM_API_ID and TELEGRAM_API_HASH in a local .env file.
 
@@ -80,7 +94,7 @@ The data model supports chat membership status and role observations, including 
 
 ## Production collection model
 
-A run is an observation snapshot, not a claim of complete lifetime history. Re-running the collector against the same Telegram ID accumulates profile, identifier, message, chat, reaction and relationship observations in SQLite. Public search hits are explicitly marked as reference observations and are never silently counted as target-authored messages. Search failures are retained in collection diagnostics.
+A run is an observation snapshot, not a claim of complete lifetime history. Re-running the collector against the same Telegram ID accumulates profile, identifier, message, chat, reaction and relationship observations in MariaDB. Public search hits are explicitly marked as reference observations and are never silently counted as target-authored messages. Search failures are retained in collection diagnostics.
 
 The tool deliberately does not attempt to recover private messages, private phone numbers, IP addresses, passwords, hidden membership, deleted/private data, account credentials or access-controlled information. Unknown remains unknown.
 
