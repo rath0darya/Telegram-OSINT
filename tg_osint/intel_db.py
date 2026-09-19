@@ -38,7 +38,8 @@ class IntelligenceDB:
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
         self._migrate()
-        self.db.executescript("""CREATE INDEX IF NOT EXISTS idx_messages_author ON messages(author_entity_id); CREATE INDEX IF NOT EXISTS idx_reactions_message ON reactions(message_id);""")
+        self._ensure_column("edges", "message_id", "INTEGER")
+        self.db.executescript("""CREATE INDEX IF NOT EXISTS idx_messages_author ON messages(author_entity_id); CREATE INDEX IF NOT EXISTS idx_reactions_message ON reactions(message_id); CREATE INDEX IF NOT EXISTS idx_edges_message ON edges(message_id);""")
         self._ensure_column("identifiers", "observation_count", "INTEGER NOT NULL DEFAULT 1")
         self.db.commit()
 
