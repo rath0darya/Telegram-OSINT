@@ -79,6 +79,7 @@ def write_html(report, path):
     manual_relationships = report.get("manual_relationships", [])
     reactions = history.get("reactions", [])
     iocs = a.get("iocs", {})
+    context_iocs = a.get("reference_iocs", {})
     eng = a.get("engagement", {})
     collection = next((x.get("metadata", {}).get("collection", {}) for x in report.get("evidence", []) if x.get("source_type") == "telegram_api_public_entity"), {})
     collection_warnings = []
@@ -121,6 +122,11 @@ def write_html(report, path):
         vals = iocs.get(key, [])
         body = "".join(f"<li>{_e(v)}</li>" for v in vals) or '<li class="muted">None observed</li>'
         ioc_cards.append(f'<article class="ioc"><div class="ioc-head"><h3>{label}</h3><strong>{len(vals)}</strong></div><ul>{body}</ul></article>')
+    context_ioc_cards = []
+    for label, key in (("URLs", "urls"), ("Usernames", "usernames"), ("Emails", "emails"), ("Domains", "domains"), ("IPv4", "ipv4")):
+        vals = context_iocs.get(key, [])
+        body = "".join(f"<li>{_e(v)}</li>" for v in vals) or '<li class="muted">None observed</li>'
+        context_ioc_cards.append(f'<article class="ioc context-ioc"><div class="ioc-head"><h3>{label}</h3><strong>{len(vals)}</strong></div><ul>{body}</ul></article>')
 
     evidence_cards = []
     for i, e in enumerate(report["evidence"], 1):
@@ -205,6 +211,7 @@ h1{{font-size:clamp(2rem,5vw,3rem);line-height:1.05;margin:.2em 0 .35em;letter-s
 <div><span class="muted">Unattributed messages</span><br><strong>{a.get("unattributed_message_count",0)}</strong></div>
 <div><span class="muted">Membership observations</span><br><strong>{collection.get("membership_observations",0)}</strong></div>
 <div><span class="muted">Discovery errors</span><br><strong>{len(collection.get("discovery_errors",[]) or [])}</strong></div>
+<div><span class="muted">Author-ID mismatches</span><br><strong>{a.get("author_mismatch_count",0)}</strong></div>
 </div><p class="muted">Target-authored counts use exact Telegram ID equality. Context/reference counts include messages collected around the target but not proven to be authored by the target. Counts are observations available to the authenticated Telegram session. A zero means no observation was collected in the accessible scope; it is not proof that the underlying event never happened.</p></section>
 
 <section class="card"><h2>Manual relationship references — this report only</h2>
