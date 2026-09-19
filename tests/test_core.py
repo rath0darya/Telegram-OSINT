@@ -45,5 +45,18 @@ class AnalyzerTests(unittest.TestCase):
         self.assertEqual(a["author_mismatch_count"], 1)
 
 
+    def test_target_author_filter_uses_exact_numeric_id(self):
+        from tg_osint.telegram_api import _message_author_matches_target
+
+        class TargetMessage:
+            sender_id = 7030758596
+
+        class OtherMessage:
+            sender_id = 2229980862
+
+        self.assertTrue(_message_author_matches_target(TargetMessage(), 7030758596))
+        self.assertFalse(_message_author_matches_target(OtherMessage(), 7030758596))
+        self.assertFalse(_message_author_matches_target(TargetMessage(), 7030758597))
+
 if __name__ == "__main__":
     unittest.main()
