@@ -162,7 +162,8 @@ def write_html(report, path):
     warnings = "".join(f"<li>{_e(x)}</li>" for x in report["errors"])
     current_username = entity.get("username")
     current_name = entity.get("display_name")
-    resolved = report.get("resolved_telegram_id") or "Unknown"
+    resolved = report.get("resolved_telegram_id")
+    resolved_display = resolved if resolved is not None else "Unknown"
 
     doc = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -191,7 +192,7 @@ h1{{font-size:clamp(2rem,5vw,3rem);line-height:1.05;margin:.2em 0 .35em;letter-s
 </style></head><body><main>
 <header class="hero"><div class="muted">Telegram-OSINT · public information only</div>
 <h1>{_e(report["target"]["handle"])}</h1>
-<div class="badge">Telegram ID: {_e(resolved)}</div>
+<div class="badge">Telegram ID: {_e(resolved_display)}</div>
 <div class="badge">{_e("@" + current_username if current_username else "No current public username")}</div>
 <div class="badge">{_e(current_name or "No current display name")}</div>
 <p class="muted">Generated {_e(report["generated_at"])} · Display timezone: Asia/Kolkata (IST, UTC+05:30) · Case #{_e(report["case_id"])}</p>
@@ -247,9 +248,9 @@ h1{{font-size:clamp(2rem,5vw,3rem);line-height:1.05;margin:.2em 0 .35em;letter-s
 <section class="grid"><div class="card"><h2>Engagement</h2><p>Views: <strong>{eng.get("total_views",0)}</strong><br>Average views: <strong>{eng.get("average_views",0)}</strong><br>Forwards: <strong>{eng.get("total_forwards",0)}</strong></p></div>
 <div class="card"><h2>Activity by day</h2><div class="table-wrap"><table><tr><th>Date</th><th>Messages</th></tr>{_table([{"date":k,"count":v} for k,v in a.get("activity_by_day",{}).items()],["date","count"],"No dated messages.")}</table></div></div></section>
 
-<section id="evidence"><h2>Collection evidence</h2>{"".join(evidence_cards) or '<div class="card muted">No evidence was collected.</div>'}</section>
+<section id="evidence"><div class="section-head"><div><h2>Collection evidence</h2><p class="muted">Every stored message is shown individually. Authorship requires an exact Telegram numeric ID match.</p></div><div class="evidence-tools"><input id="evidenceSearch" type="search" placeholder="Filter evidence..."><button type="button" id="openEvidence">Open all</button><button type="button" id="closeEvidence">Close all</button></div></div>{"".join(evidence_cards) or '<div class="card muted">No evidence was collected.</div>'}</section>
 {f'<section><div class="card warn"><h2>Collection warnings</h2><ul>{warnings}</ul></div></section>' if warnings else ""}
 {f'<section><div class="card warn"><h2>Collector diagnostics</h2><ul>{"".join(f"<li>{_e(x)}</li>" for x in collection_warnings)}</ul></div></section>' if collection_warnings else ""}
 <footer class="muted">Report schema 1.8.0 · Stored timestamps remain machine-readable; report timestamps are displayed in IST (UTC+05:30) · public-information-only collection · historical completeness is not guaranteed.</footer>
-</main></body></html>"""
+</main><script>const q=document.getElementById('evidenceSearch');const cards=[...document.querySelectorAll('.evidence')];q?.addEventListener('input',()=>{const term=q.value.trim().toLowerCase();cards.forEach(x=>x.hidden=term&&!x.innerText.toLowerCase().includes(term));});document.getElementById('openEvidence')?.addEventListener('click',()=>cards.forEach(x=>x.open=true));document.getElementById('closeEvidence')?.addEventListener('click',()=>cards.forEach(x=>x.open=false));</script></body></html>"""
     p.write_text(doc, encoding="utf-8")
