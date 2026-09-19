@@ -192,11 +192,12 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
 
         async def collect_global_author_messages():
             nonlocal global_author_seen
-            # A user's own entity is not a global message-history source. Telegram's
-            # global search supports from_user, which is the correct way to find
-            # publicly searchable messages authored by the resolved account.
+            # Resolve the target to the input-peer form expected by Telegram's
+            # global from_user filter. Passing the raw User object can produce
+            # InputPeerEmpty on some Telethon/Telegram combinations.
+            author_peer = await client.get_input_entity(entity)
             async for msg in client.iter_messages(
-                None, from_user=entity, limit=min(limit, 100)
+                None, from_user=author_peer, limit=min(limit, 100)
             ):
                 global_author_seen += 1
                 await collect_one(msg, search_context=False)
@@ -205,8 +206,6 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
             nonlocal global_reference_seen
             if not public_username:
                 return
-            # Search both forms because Telegram's global index may tokenize
-            # username mentions differently from ordinary text.
             seen_keys = set()
             for query in (f"@{public_username}", public_username):
                 async for msg in client.iter_messages(
@@ -220,9 +219,6 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                     await collect_one(msg, search_context=True)
 
         if limit > 0:
-            # Keep partial results when Telegram resets a connection. Each stage is
-            # isolated so a history/search failure does not discard the identity
-            # observation or results collected by the other stage.
             for attempt in range(3):
                 try:
                     await collect_history()
@@ -247,8 +243,6 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                     else:
                         break
 
-            # These are reference/mention observations, not proof that the target
-            # authored the matching messages.
             if public_username:
                 for attempt in range(3):
                     try:
