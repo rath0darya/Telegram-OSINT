@@ -60,9 +60,11 @@ class IntelligenceDB:
                 self.db.execute(ddl)
 
     def _entity(self, telegram_id, username, display_name, entity_type, observed_at, metadata):
+        # Numeric Telegram ID is the authoritative identity key. Never merge
+        # two numeric IDs because a username happens to be equal/reused.
         row = self.db.execute("SELECT id FROM entities WHERE telegram_id=?", (int(telegram_id),)).fetchone() if telegram_id is not None else None
-        if row is None and username:
-            row = self.db.execute("SELECT id FROM entities WHERE lower(username)=lower(?)", (username,)).fetchone()
+        if row is None and telegram_id is None and username:
+            row = self.db.execute("SELECT id FROM entities WHERE lower(username)=lower(?) AND telegram_id IS NULL", (username,)).fetchone()
         if row:
             eid = row["id"]
             self.db.execute("UPDATE entities SET telegram_id=COALESCE(?,telegram_id), username=COALESCE(?,username), display_name=COALESCE(?,display_name), entity_type=?, last_observed=?, metadata_json=? WHERE id=?", (telegram_id, username, display_name, entity_type, observed_at, json.dumps(metadata, sort_keys=True), eid))
@@ -73,9 +75,11 @@ class IntelligenceDB:
         return eid
 
     def _chat(self, telegram_id, username, title, chat_type, observed_at, metadata):
+        # Chat/channel numeric ID is authoritative too; a reused username
+        # must never merge two different chats.
         row = self.db.execute("SELECT id FROM chats WHERE telegram_id=?", (int(telegram_id),)).fetchone() if telegram_id is not None else None
-        if row is None and username:
-            row = self.db.execute("SELECT id FROM chats WHERE lower(username)=lower(?)", (username,)).fetchone()
+        if row is None and telegram_id is None and username:
+            row = self.db.execute("SELECT id FROM chats WHERE lower(username)=lower(?) AND telegram_id IS NULL", (username,)).fetchone()
         if row:
             cid = row["id"]
             self.db.execute("UPDATE chats SET username=COALESCE(?,username), title=COALESCE(?,title), chat_type=?, last_observed=?, metadata_json=? WHERE id=?", (username, title, chat_type, observed_at, json.dumps(metadata, sort_keys=True), cid))
