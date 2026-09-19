@@ -100,6 +100,10 @@ def main():
     print(f"HTML report : {hp}")
     if collection:
         print(f"API messages: requested={collection.get('messages_requested', 0)} seen={collection.get('messages_seen', 0)} with_text={collection.get('messages_with_text', 0)}")
+        print(f"History: seen={collection.get('history_seen', 0)} with_text={collection.get('history_with_text', 0)}")
+        print(f"Public search: seen={collection.get('search_seen', 0)} with_text={collection.get('search_with_text', 0)}")
+        for search_error in collection.get("search_errors", []):
+            print(f"Search warning: {search_error}")
         print(f"Resolved ID : {collection.get('resolved_telegram_id')}")
     if not ev and not errors:
         errors.append("No evidence was produced; Telegram entity resolution did not return data.")
