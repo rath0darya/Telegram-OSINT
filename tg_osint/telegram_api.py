@@ -75,6 +75,8 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
         chat_scan_seen = 0
         chat_scan_matches = 0
         membership_observations = 0
+        accessible_public_dialogs = 0
+        id_dialog_scan_errors = []
         stored_message_keys = set()
 
         async def collect_one(msg, search_context=False):
@@ -202,29 +204,63 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
 
         async def collect_global_author_messages():
             nonlocal global_author_seen
-            candidates = []
-            if public_username:
-                candidates.append(public_username)
-            candidates.append(entity)
-            access_hash = getattr(entity, "access_hash", None)
-            if access_hash is not None and isinstance(entity, types.User):
-                candidates.append(types.InputPeerUser(user_id=entity.id, access_hash=access_hash))
-            last_error = None
-            for index, author_peer in enumerate(candidates):
+            # ID-centric search: once Telegram has resolved the target entity,
+            # use its InputPeerUser rather than username/name text. This keeps
+            # historical username changes attached to the same numeric ID.
+            target_input = await client.get_input_entity(entity)
+            try:
+                local_seen = 0
+                async for msg in client.iter_messages(
+                    None,
+                    from_user=target_input,
+                    limit=min(limit, 3000),
+                ):
+                    local_seen += 1
+                    global_author_seen += 1
+                    await collect_one(msg, search_context=False)
+                return local_seen
+            except Exception as exc:
+                raise RuntimeError(
+                    f"ID-centric global author search failed for Telegram ID {entity_id}: "
+                    f"{type(exc).__name__}: {exc}"
+                ) from exc
+
+        async def scan_accessible_public_dialogs_by_id():
+            nonlocal chat_scan_seen, chat_scan_matches
+            target_input = await client.get_input_entity(entity)
+            dialog_count = 0
+            dialog_errors = []
+            # Search every public dialog available to the authenticated session.
+            # This is intentionally ID-based; usernames are not used as the
+            # authorship key and therefore username changes do not break history.
+            async for dialog in client.iter_dialogs(limit=None):
+                chat = getattr(dialog, "entity", None)
+                if chat is None:
+                    continue
+                chat_username = getattr(chat, "username", None)
+                if not chat_username:
+                    continue
+                dialog_count += 1
                 try:
-                    local_seen = 0
+                    local_count = 0
                     async for msg in client.iter_messages(
-                        None, from_user=author_peer, limit=min(limit, 3000)
+                        dialog.input_entity,
+                        from_user=target_input,
+                        limit=min(limit, 3000),
                     ):
-                        local_seen += 1
-                        global_author_seen += 1
+                        local_count += 1
+                        chat_scan_seen += 1
+                        before = len(out)
                         await collect_one(msg, search_context=False)
-                    if local_seen:
-                        return
+                        if len(out) > before:
+                            author = (out[-1].metadata or {}).get("author")
+                            if isinstance(author, dict) and author.get("id") == int(entity_id):
+                                chat_scan_matches += 1
                 except Exception as exc:
-                    last_error = exc
-            if last_error:
-                raise last_error
+                    dialog_errors.append(
+                        f"{chat_username}: {type(exc).__name__}: {exc}"
+                    )
+            return dialog_count, dialog_errors
 
         async def collect_public_search():
             nonlocal global_reference_seen
@@ -384,12 +420,18 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
 
             # Broad public-surface discovery is the fallback when Telegram's
             # global from_user index cannot resolve the target peer.
+            try:
+                accessible_public_dialogs, id_dialog_scan_errors = await scan_accessible_public_dialogs_by_id()
+            except Exception as exc:
+                id_dialog_scan_errors.append(
+                    f"ID dialog scan: {type(exc).__name__}: {exc}"
+                )
             await discover_public_chats()
             await scan_discovered_chats()
 
         source = f"https://t.me/{public_username}" if public_username else f"telegram://id/{entity_id}"
         entity_text = str(data)
-        out.insert(0, Evidence("telegram_api_public_entity", source, now_iso(), data.get("title") or data.get("display_name") or public_username or str(entity_id), entity_text, sha256_text(entity_text), {"entity": data, "collection": {"messages_requested": max(0, limit), "messages_seen": seen, "messages_with_text": with_text, "history_seen": seen - search_seen, "history_with_text": with_text - search_with_text, "search_seen": search_seen, "search_with_text": search_with_text, "search_errors": search_errors, "history_errors": history_errors, "global_author_seen": global_author_seen, "global_author_errors": global_author_errors, "global_reference_seen": global_reference_seen, "discovered_chat_count": len(discovered_chats), "chat_scan_seen": chat_scan_seen, "chat_scan_matches": chat_scan_matches, "membership_observations": membership_observations, "discovery_errors": discovery_errors, "resolved_telegram_id": entity_id}, "iocs": extract_iocs(entity_text)}))
+        out.insert(0, Evidence("telegram_api_public_entity", source, now_iso(), data.get("title") or data.get("display_name") or public_username or str(entity_id), entity_text, sha256_text(entity_text), {"entity": data, "collection": {"messages_requested": max(0, limit), "messages_seen": seen, "messages_with_text": with_text, "history_seen": seen - search_seen, "history_with_text": with_text - search_with_text, "search_seen": search_seen, "search_with_text": search_with_text, "search_errors": search_errors, "history_errors": history_errors, "global_author_seen": global_author_seen, "global_author_errors": global_author_errors, "global_reference_seen": global_reference_seen, "discovered_chat_count": len(discovered_chats), "chat_scan_seen": chat_scan_seen, "chat_scan_matches": chat_scan_matches, "membership_observations": membership_observations, "accessible_public_dialogs": accessible_public_dialogs, "id_dialog_scan_errors": id_dialog_scan_errors, "discovery_errors": discovery_errors, "resolved_telegram_id": entity_id, "identity_collection_mode": "telegram_numeric_id_first"}, "iocs": extract_iocs(entity_text)}))
     finally:
         await client.disconnect()
     return out
