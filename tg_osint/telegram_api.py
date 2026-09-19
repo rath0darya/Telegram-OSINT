@@ -192,8 +192,8 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                         None, search=f"@{public_username}", limit=min(limit, 100)
                     ):
                         await collect_one(msg, search_context=True)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    search_errors.append(f"{type(exc).__name__}: {exc}")
 
         source = f"https://t.me/{public_username}" if public_username else f"telegram://id/{entity_id}"
         entity_text = str(data)
