@@ -25,8 +25,22 @@ class AnalyzerTests(unittest.TestCase):
         self.assertEqual(a["message_count"], 1)
         self.assertEqual(a["authored_message_count"], 1)
         self.assertEqual(a["unattributed_message_count"], 0)
+        self.assertEqual(a["non_authored_message_count"], 0)
+        self.assertEqual(a["identity_rule"], "telegram_id_exact_match_only")
         self.assertIn("@sample_user", a["mentions"])
         self.assertEqual(a["engagement"]["total_views"], 10)
+
+    def test_text_match_does_not_create_target_authorship(self):
+        from tg_osint.analyzer import analyze_evidence
+        e = Evidence("telegram_public_message", "https://t.me/x/2", "2026-01-01T00:00:00+00:00", "m", "hello @target", "y", {
+            "date": "2026-01-01T00:00:00+00:00",
+            "author": {"id": 999, "username": "target"}
+        })
+        a = analyze_evidence([e], target_id=123)
+        self.assertEqual(a["authored_message_count"], 0)
+        self.assertEqual(a["non_authored_message_count"], 1)
+        self.assertEqual(a["iocs"]["usernames"], [])
+        self.assertIn("@target", a["reference_iocs"]["usernames"])
 
 
 if __name__ == "__main__":
