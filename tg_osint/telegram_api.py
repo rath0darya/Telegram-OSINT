@@ -245,26 +245,40 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
 
         async def collect_global_author_messages():
             nonlocal global_author_seen
-            # ID-centric search: once Telegram has resolved the target entity,
-            # use its InputPeerUser rather than username/name text. This keeps
-            # historical username changes attached to the same numeric ID.
+            # Telethon's global iterator requires a non-empty search query.
+            # Calling iter_messages(None, from_user=...) without search makes
+            # it build a global request around InputPeerEmpty and can fail with
+            # "InputPeerEmpty() does not have any entity type".  Use the target's
+            # currently resolved public username/display name only as a search
+            # accelerator; exact authorship is still enforced by numeric ID below.
+            queries = []
+            if public_username:
+                queries.extend([public_username, f"@{public_username}"])
+            if data.get("display_name"):
+                queries.append(data["display_name"])
+            queries = list(dict.fromkeys(q for q in queries if q))
+            if not queries:
+                return 0
+
             target_input = _target_input_peer(entity, int(entity_id), types)
-            try:
-                local_seen = 0
-                async for msg in client.iter_messages(
-                    None,
-                    from_user=target_input,
-                    limit=min(limit, 3000),
-                ):
-                    local_seen += 1
-                    global_author_seen += 1
-                    await collect_one(msg, search_context=False, target_author_only=True)
-                return local_seen
-            except Exception as exc:
-                raise RuntimeError(
-                    f"ID-centric global author search failed for Telegram ID {entity_id}: "
-                    f"{type(exc).__name__}: {exc}"
-                ) from exc
+            total = 0
+            for query in queries:
+                try:
+                    async for msg in client.iter_messages(
+                        None,
+                        search=query,
+                        from_user=target_input,
+                        limit=min(limit, 3000),
+                    ):
+                        total += 1
+                        global_author_seen += 1
+                        await collect_one(msg, search_context=False, target_author_only=True)
+                except Exception as exc:
+                    raise RuntimeError(
+                        f"ID-based global search failed for Telegram ID {entity_id} "
+                        f"with query {query!r}: {type(exc).__name__}: {exc}"
+                    ) from exc
+            return total
 
         async def scan_accessible_public_dialogs_by_id():
             nonlocal chat_scan_seen, chat_scan_matches
