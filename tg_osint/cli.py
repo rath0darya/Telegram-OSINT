@@ -101,7 +101,10 @@ def main():
     if collection:
         print(f"API messages: requested={collection.get('messages_requested', 0)} seen={collection.get('messages_seen', 0)} with_text={collection.get('messages_with_text', 0)}")
         print(f"History: seen={collection.get('history_seen', 0)} with_text={collection.get('history_with_text', 0)}")
-        print(f"Public search: seen={collection.get('search_seen', 0)} with_text={collection.get('search_with_text', 0)}")
+        print(f"Global author search: seen={collection.get('global_author_seen', 0)}")
+        print(f"Public search: seen={collection.get('global_reference_seen', collection.get('search_seen', 0))} with_text={collection.get('search_with_text', 0)}")
+        for author_error in collection.get("global_author_errors", []):
+            print(f"Global author search warning: {author_error}")
         for history_error in collection.get("history_errors", []):
             print(f"History warning: {history_error}")
         for search_error in collection.get("search_errors", []):
