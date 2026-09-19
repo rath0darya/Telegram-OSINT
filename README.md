@@ -8,6 +8,18 @@ resolve username -> numeric Telegram ID -> collect public observations -> store 
 
 The numeric Telegram ID is the primary identity key once Telegram resolves the target. Usernames and display names are stored as time-stamped observations so later runs can show changes without creating a new entity.
 
+## Identity specification
+
+- Telegram numeric user ID is the authoritative identity key after resolution.
+- A username is a mutable identifier. A username change does not create a new person entity when the Telegram ID remains the same.
+- Historical usernames are retained as identifiers/profile observations of the same numeric ID.
+- A message is target-authored only when its exposed sender/author Telegram ID exactly equals the resolved target ID.
+- Username, display-name, or text matches never override an exposed sender ID.
+- The collector uses the resolved numeric ID for global author search and for searches across accessible public dialogs.
+- A reused username must never merge two different numeric Telegram IDs in the intelligence database.
+- Relationships to other Telegram IDs remain separate entities; a relationship is not an identity merge.
+- Public search/reference hits are contextual unless their author ID exactly matches the target ID.
+
 ## Scope
 
 This project is limited to lawful public information and data the authenticated Telegram account can legitimately obtain through normal Telegram APIs. It does not bypass access controls or attempt to obtain private phone numbers, IP addresses, passwords, private messages, account takeover data, or hidden account information.
@@ -17,6 +29,7 @@ Membership/admin information is recorded only when Telegram actually exposes the
 ## Features
 
 - Resolve public usernames to stable Telegram numeric IDs
+- Collect by numeric Telegram ID after resolution, including accessible public-dialog author searches
 - Preserve observed username and display-name history
 - Store profile snapshots over time
 - Store accessible public messages with author IDs when exposed
