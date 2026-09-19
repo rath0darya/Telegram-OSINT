@@ -22,6 +22,37 @@ class IntelligenceDBTests(unittest.TestCase):
             self.assertEqual(db.resolve_identifier("telegram_username", "new_name"), 123)
             db.close()
 
+    def test_username_reuse_never_merges_different_telegram_ids(self):
+        with tempfile.TemporaryDirectory() as d:
+            db = IntelligenceDB(f"{d}/intel.db")
+            first = Evidence(
+                "telegram_api_public_entity",
+                "https://t.me/sharedname",
+                "2026-09-18T00:00:00+00:00",
+                "sharedname",
+                "first",
+                sha256_text("first"),
+                {"entity": {"id": 111, "username": "sharedname", "first_name": "First"}},
+            )
+            second = Evidence(
+                "telegram_api_public_entity",
+                "https://t.me/sharedname",
+                "2026-09-19T00:00:00+00:00",
+                "sharedname",
+                "second",
+                sha256_text("second"),
+                {"entity": {"id": 222, "username": "sharedname", "first_name": "Second"}},
+            )
+            db.ingest([first, second])
+            self.assertEqual(db.resolve_identifier("telegram_username", "sharedname"), 222)
+            rows = db.db.execute(
+                "SELECT telegram_id, first_name FROM profile_snapshots JOIN entities ON entities.id=profile_snapshots.entity_id ORDER BY observed_at"
+            ).fetchall()
+            self.assertEqual([r["telegram_id"] for r in rows], [111, 222])
+            self.assertEqual(len(db.search("111")), 1)
+            self.assertEqual(len(db.search("222")), 1)
+            db.close()
+
     def test_message_author_and_mention_relationship(self):
         with tempfile.TemporaryDirectory() as d:
             db = IntelligenceDB(f"{d}/intel.db")
