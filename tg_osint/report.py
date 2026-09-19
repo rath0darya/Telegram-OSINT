@@ -58,7 +58,7 @@ def _raw(v):
     return "" if v is None else str(v)
 
 
-def _table(rows, columns, headers=None, main=None, empty="Нет данных."):
+def _table(rows, columns, headers=None, main=None, empty="No data."):
     headers = headers or [c.replace("_", " ").title() for c in columns]
     main = main or (columns[0] if columns else None)
     if not rows:
@@ -110,33 +110,33 @@ def write_html(report, path):
 
     profile_rows = [
         {"value": x.get("display_name") or x.get("title") or "—",
-         "known": ("сейчас · " if x.get("is_current") else "") + _raw(x.get("observed_at") or "—")}
+         "known": ("current · " if x.get("is_current") else "") + _raw(x.get("observed_at") or "—")}
         for x in profiles
     ]
     if not profile_rows and display_name:
-        profile_rows = [{"value": display_name, "known": "сейчас"}]
+        profile_rows = [{"value": display_name, "known": "current"}]
 
     username_rows = [
         {"value": "@" + str(x.get("value", "")).lstrip("@"),
-         "known": ("сейчас · " if x.get("is_current") else "") + _raw(x.get("observed_at") or "—")}
+         "known": ("current · " if x.get("is_current") else "") + _raw(x.get("observed_at") or "—")}
         for x in usernames
     ]
     if not username_rows and username:
-        username_rows = [{"value": "@" + str(username).lstrip("@"), "known": "сейчас"}]
+        username_rows = [{"value": "@" + str(username).lstrip("@"), "known": "current"}]
 
     def chat_name(x):
         return x.get("chat_title") or x.get("chat_username") or x.get("chat_type") or "Unknown"
 
     group_rows = [
         {"chat": chat_name(x), "username": ("@" + str(x.get("chat_username")).lstrip("@")) if x.get("chat_username") else "—",
-         "how": "писал" if x.get("status") in ("message", "active") else "в составе",
+         "how": "posted" if x.get("status") in ("message", "active") else "member of",
          "date": x.get("observed_at") or "—"}
         for x in memberships
     ]
     if not group_rows:
         group_rows = [
             {"chat": chat_name(x), "username": ("@" + str(x.get("chat_username")).lstrip("@")) if x.get("chat_username") else "—",
-             "how": "писал", "date": x.get("observed_at") or x.get("message_date") or "—"}
+             "how": "posted", "date": x.get("observed_at") or x.get("message_date") or "—"}
             for x in messages
         ]
 
@@ -153,7 +153,7 @@ def write_html(report, path):
         {"person": x.get("target_username") or x.get("target_telegram_id") or x.get("source_telegram_id") or "Unknown",
          "username": x.get("target_username") or "—",
          "id": x.get("target_telegram_id") or x.get("source_telegram_id") or "—",
-         "kind": x.get("edge_type") or "наблюдение",
+         "kind": x.get("edge_type") or "observation",
          "where": x.get("source_url") or "—"}
         for x in relationships
     ]
@@ -224,15 +224,15 @@ def write_html(report, path):
             v = x.get("value")
             if v:
                 vals.append(f'<span class="chip">{_e(prefix + str(v).lstrip("@") if prefix else v)}</span>')
-        return "".join(vals) or '<span class="muted">Нет наблюдений</span>'
+        return "".join(vals) or '<span class="muted">No observations</span>'
 
     def ioc_section(title, source):
         cards = []
         for label, key in (("URLs", "urls"), ("Usernames", "usernames"), ("Emails", "emails"), ("Domains", "domains"), ("IPv4", "ipv4")):
             vals = source.get(key, []) or []
-            body = "".join(f"<li>{_e(v)}</li>" for v in vals) or '<li class="muted">Нет наблюдений</li>'
+            body = "".join(f"<li>{_e(v)}</li>" for v in vals) or '<li class="muted">No observations</li>'
             cards.append(f'<article class="ioc"><div class="ioc-head"><h3>{label}</h3><strong>{len(vals)}</strong></div><ul>{body}</ul></article>')
-        return f'<section class="ioc-block"><div class="sect-title"><h2>{_e(title)}</h2><span class="muted">из собранных сообщений</span></div><div class="iocgrid">{"".join(cards)}</div></section>'
+        return f'<section class="ioc-block"><div class="sect-title"><h2>{_e(title)}</h2><span class="muted">from collected messages</span></div><div class="iocgrid">{"".join(cards)}</div></section>'
 
     evidence_cards = []
     for i, e in enumerate(report.get("evidence", []), 1):
@@ -247,20 +247,20 @@ def write_html(report, path):
         )
         if e.get("source_type") == "telegram_public_message":
             mapping = (
-                '<div class="meta"><span>Атрибуция</span><strong>ТОЧНОЕ СОВПАДЕНИЕ ID — сообщение принадлежит цели</strong></div>'
+                '<div class="meta"><span>Attribution</span><strong>EXACT ID MATCH — message belongs to target</strong></div>'
                 if exact else
-                '<div class="meta"><span>Атрибуция</span><strong title="NO — context only; different/unknown author ID">НЕТ — контекст; ID автора отличается или неизвестен</strong></div>'
+                '<div class="meta"><span>Attribution</span><strong title="NO — context only; different/unknown author ID">NO — context only; author ID differs or is unknown</strong></div>'
             )
             ids = f'<div class="meta"><span>Telegram ID</span><code>message={_e(metadata.get("message_id"))} · chat={_e((metadata.get("chat") or {}).get("id"))} · author={_e(author_id)}</code></div>'
         else:
-            mapping = '<div class="meta"><span>Тип</span><strong>Профильная / идентификационная запись</strong></div>'
+            mapping = '<div class="meta"><span>Type</span><strong>Profile / identification record</strong></div>'
             ids = ""
         evidence_cards.append(
             f'<details class="evidence"><summary><strong>{_e(e.get("title") or "Evidence")}</strong><span class="muted">#{i} · {_e(e.get("source_type"))}</span></summary>'
             f'<div class="evidence-body"><a href="{_e(e.get("source_url"))}" rel="noopener noreferrer">{_e(e.get("source_url"))}</a>'
-            f'<div class="meta"><span>Собрано</span><strong>{_e(e.get("collected_at"))}</strong></div>{mapping}{ids}'
+            f'<div class="meta"><span>Collected</span><strong>{_e(e.get("collected_at"))}</strong></div>{mapping}{ids}'
             f'<pre>{_e(e.get("text") or "")}</pre><div class="meta"><span>SHA-256</span><code>{_e(e.get("sha256"))}</code></div>'
-            f'<details><summary>Сырые метаданные</summary><pre>{_e(e.get("metadata") or {})}</pre></details></div></details>'
+            f'<details><summary>Raw metadata</summary><pre>{_e(e.get("metadata") or {})}</pre></details></div></details>'
         )
 
     warnings = "".join(f"<li>{_e(x)}</li>" for x in report.get("errors", []))
@@ -270,8 +270,8 @@ def write_html(report, path):
             collection_warnings.append(f"{key.replace('_', ' ').title()}: {item}")
 
     html_doc = f'''<!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Telegram-OSINT — отчёт по {_e(handle)}</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Telegram-OSINT — report by {_e(handle)}</title>
 <style>
 :root{{--void:#070a0e;--panel:#0e141b;--panel-2:#121a23;--raise:#18232f;--zebra:#111922;
 --line:#1e2b37;--hair:#17222c;--ink:#e3ecf4;--dim:#93a6b7;--faint:#5f7284;
@@ -321,48 +321,48 @@ table{{width:100%;border-collapse:collapse;font-size:13.5px}}th{{background:var(
 @media(max-width:620px){{:root{{--gutter:14px;--bar:50px}}.top .stamp{{display:none}}.find{{max-width:none}}.hero{{padding-top:18px}}.sigil{{width:48px;height:48px;border-radius:13px;font-size:17px}}.cta{{width:100%;justify-content:center;order:3}}.tile .n{{font-size:22px}}table{{display:block;background:var(--panel)}}tr:first-child{{display:none}}tr,tr:nth-child(even){{display:block;padding:12px 14px;background:var(--panel);border-bottom:1px solid var(--hair)}}tr:last-child{{border-bottom:0}}tr:not(:first-child):hover{{background:var(--panel)}}td{{display:block;width:auto;padding:0;text-align:left}}td:not([data-label]),td[data-label][data-empty]{{display:none}}td[data-main]{{font-family:var(--ui);font-size:14.5px;font-weight:600;line-height:1.35;padding-bottom:5px;max-width:none}}td[data-label]:not([data-main]){{font-family:var(--mono);font-size:11.5px;line-height:1.6;color:var(--dim)}}.k{{display:inline;color:var(--faint)}}}}
 @media print{{:root{{color-scheme:light;--void:#eaeef3;--panel:#fff;--panel-2:#f5f8fb;--raise:#e9eff5;--zebra:#f7f9fb;--line:#dbe3ec;--hair:#e9eef4;--ink:#101823;--dim:#54677a;--faint:#8496a6;--accent:#9a5d04;--on-accent:#fff;--link:#0d6ea6;--react:#a63f76;--alert:#b3261e}}body{{background:#fff}}.top{{position:static;border-bottom:2px solid #000}}.find,.theme,.side,.copy,.chev{{display:none}}.shell{{display:block}}.card,.evidence{{box-shadow:none}}.head{{position:static}}tr{{break-inside:avoid}}}}
 </style></head><body>
-<header class="top"><div class="brand"><i></i>Telegram-OSINT</div><div class="kind">Отчёт по пользователю</div><div class="stamp">{_e(report.get("generated_at"))}</div>
-<div class="find"><span class="glass"></span><input id="q" placeholder="Поиск по отчёту…" autocomplete="off"><kbd>/</kbd></div>
-<button class="theme" id="theme" type="button" title="Переключить тему">◐</button></header>
+<header class="top"><div class="brand"><i></i>Telegram-OSINT</div><div class="kind">User report</div><div class="stamp">{_e(report.get("generated_at"))}</div>
+<div class="find"><span class="glass"></span><input id="q" placeholder="Search report…" autocomplete="off"><kbd>/</kbd></div>
+<button class="theme" id="theme" type="button" title="Toggle theme">◐</button></header>
 <div class="page">
 <section class="hero card"><div class="who"><div class="sigil">{_e(("".join(w[0] for w in str(display_name).split()[:2]) or "?").upper())}</div>
-<div class="names"><h1>{_e(display_name)}</h1><div class="chips"><span class="chip">ID <b>{_e(resolved_display)}</b></span>{f'<a class="chip handle" href="{_e(target.get("url") or ("https://t.me/" + str(username)))}">@{_e(str(username).lstrip("@"))}</a>' if username else '<span class="chip">username не наблюдался</span>'}<span class="chip">{_e(report.get("collection_scope"))}</span></div></div>
-{f'<a class="cta" href="{_e(target.get("url") or ("https://t.me/" + str(username)))}">Открыть в Telegram</a>' if username else ''}</div>
-<div class="tape"><div class="cap"><span>Лента наблюдений</span><span>{tape_marks} отметок</span></div><div class="plot">{plot}</div><div class="axis">{axis}</div><div class="ends"><span>{_e(start.strftime("%d.%m.%Y"))}</span><span>{_e(end.strftime("%d.%m.%Y"))}</span></div></div>
-<div class="facts"><div class="fact"><span class="l">Первое наблюдение</span><span class="v">{_e(start.strftime("%d.%m.%Y %H:%M"))}</span></div><div class="fact"><span class="l">Последнее наблюдение</span><span class="v">{_e(end.strftime("%d.%m.%Y %H:%M"))}</span></div><div class="fact"><span class="l">Часовой пояс</span><span class="v">Asia/Kolkata · UTC+05:30</span></div></div></section>
-<div class="tiles"><div class="tile"><span class="n">{len(memberships)}</span><span class="l">групп</span></div><div class="tile"><span class="n">{len(messages)}</span><span class="l">сообщений</span></div><div class="tile"><span class="n">{len(reaction_in)}</span><span class="l">реакций</span></div><div class="tile"><span class="n">{len(report.get("evidence", []))}</span><span class="l">источников</span></div></div>
+<div class="names"><h1>{_e(display_name)}</h1><div class="chips"><span class="chip">ID <b>{_e(resolved_display)}</b></span>{f'<a class="chip handle" href="{_e(target.get("url") or ("https://t.me/" + str(username)))}">@{_e(str(username).lstrip("@"))}</a>' if username else '<span class="chip">username not observed</span>'}<span class="chip">{_e(report.get("collection_scope"))}</span></div></div>
+{f'<a class="cta" href="{_e(target.get("url") or ("https://t.me/" + str(username)))}">Open in Telegram</a>' if username else ''}</div>
+<div class="tape"><div class="cap"><span>Observation timeline</span><span>{tape_marks} observations</span></div><div class="plot">{plot}</div><div class="axis">{axis}</div><div class="ends"><span>{_e(start.strftime("%d.%m.%Y"))}</span><span>{_e(end.strftime("%d.%m.%Y"))}</span></div></div>
+<div class="facts"><div class="fact"><span class="l">First observation</span><span class="v">{_e(start.strftime("%d.%m.%Y %H:%M"))}</span></div><div class="fact"><span class="l">Last observation</span><span class="v">{_e(end.strftime("%d.%m.%Y %H:%M"))}</span></div><div class="fact"><span class="l">Timezone</span><span class="v">Asia/Kolkata · UTC+05:30</span></div></div></section>
+<div class="tiles"><div class="tile"><span class="n">{len(memberships)}</span><span class="l">groups</span></div><div class="tile"><span class="n">{len(messages)}</span><span class="l">messages</span></div><div class="tile"><span class="n">{len(reaction_in)}</span><span class="l">reactions</span></div><div class="tile"><span class="n">{len(report.get("evidence", []))}</span><span class="l">sources</span></div></div>
 
-<div class="shell"><aside class="side"><div class="inner"><input class="switch" id="nav-switch" type="checkbox"><label class="label" for="nav-switch">Разделы</label><nav>
-<a href="#names"><span>История имён</span><b>{len(profile_rows)}</b></a><a href="#usernames"><span>История @username</span><b>{len(username_rows)}</b></a><a href="#reactions0"><span>Кто ставил реакции</span><b>{len(reaction_in)}</b></a><a href="#reactions1"><span>Кому ставил реакции</span><b>{len(reaction_out)}</b></a><a href="#groups"><span>Группы</span><b>{len(group_rows)}</b></a><a href="#admin"><span>Администрирование</span><b>0</b></a><a href="#chats"><span>Сообщения по чатам</span><b>{len(chat_rows)}</b></a><a href="#messages"><span>Сообщения</span><b>{len(message_rows)}</b></a><a href="#evidence"><span>Свидетельства</span><b>{len(report.get("evidence", []))}</b></a></nav></div></aside><main>
+<div class="shell"><aside class="side"><div class="inner"><input class="switch" id="nav-switch" type="checkbox"><label class="label" for="nav-switch">Sections</label><nav>
+<a href="#names"><span>Name history</span><b>{len(profile_rows)}</b></a><a href="#usernames"><span>@username history</span><b>{len(username_rows)}</b></a><a href="#reactions0"><span>Who reacted</span><b>{len(reaction_in)}</b></a><a href="#reactions1"><span>Reactions given</span><b>{len(reaction_out)}</b></a><a href="#groups"><span>Groups</span><b>{len(group_rows)}</b></a><a href="#admin"><span>Administration</span><b>0</b></a><a href="#chats"><span>Messages by chat</span><b>{len(chat_rows)}</b></a><a href="#messages"><span>Messages</span><b>{len(message_rows)}</b></a><a href="#evidence"><span>Evidence</span><b>{len(report.get("evidence", []))}</b></a></nav></div></aside><main>
 
-<details class="card sect" id="names" open><summary class="head"><i class="chev"></i><span class="t">История имён</span><b class="n">{len(profile_rows)}</b><span class="copy" role="button" tabindex="0" title="Скопировать таблицу">⧉</span></summary><div class="fold"><table><tr><th></th><th>Значение</th><th>Известно с</th></tr>{_table(profile_rows, ["value","known"], ["Значение","Известно с"], "value", "Нет наблюдений имени.")}</table></div></details>
+<details class="card sect" id="names" open><summary class="head"><i class="chev"></i><span class="t">Name history</span><b class="n">{len(profile_rows)}</b><span class="copy" role="button" tabindex="0" title="Copy table">⧉</span></summary><div class="fold"><table><tr><th></th><th>Value</th><th>Known since</th></tr>{_table(profile_rows, ["value","known"], ["Value","Known since"], "value", "No name observations.")}</table></div></details>
 
-<details class="card sect" id="usernames" open><summary class="head"><i class="chev"></i><span class="t">История @username</span><b class="n">{len(username_rows)}</b><span class="copy" role="button" tabindex="0" title="Скопировать таблицу">⧉</span></summary><div class="fold"><table><tr><th></th><th>Значение</th><th>Известно с</th></tr>{_table(username_rows, ["value","known"], ["Значение","Известно с"], "value", "Нет наблюдений username.")}</table></div></details>
+<details class="card sect" id="usernames" open><summary class="head"><i class="chev"></i><span class="t">@username history</span><b class="n">{len(username_rows)}</b><span class="copy" role="button" tabindex="0" title="Copy table">⧉</span></summary><div class="fold"><table><tr><th></th><th>Value</th><th>Known since</th></tr>{_table(username_rows, ["value","known"], ["Value","Known since"], "value", "No username observations.")}</table></div></details>
 
-<details class="card sect" id="reactions0" open><summary class="head"><i class="chev"></i><span class="t">Кто ставил реакции</span><b class="n">{len(reaction_in)}</b><span class="copy" role="button" tabindex="0" title="Скопировать таблицу">⧉</span></summary><div class="fold"><table><tr><th></th><th>Человек</th><th>@username</th><th>ID</th><th>Реакций</th><th>В основном</th><th>Где</th></tr>{_table(reaction_in, ["person","username","id","count","main","where"], ["Человек","@username","ID","Реакций","В основном","Где"], "person", "Нет наблюдений реакций.")}</table><p class="note">Показываются только реакции, которые Telegram-OSINT реально собрал в текущей доступной области данных.</p></div></details>
+<details class="card sect" id="reactions0" open><summary class="head"><i class="chev"></i><span class="t">Who reacted</span><b class="n">{len(reaction_in)}</b><span class="copy" role="button" tabindex="0" title="Copy table">⧉</span></summary><div class="fold"><table><tr><th></th><th>Person</th><th>@username</th><th>ID</th><th>Reactions</th><th>Mainly</th><th>Where</th></tr>{_table(reaction_in, ["person","username","id","count","main","where"], ["Person","@username","ID","Reactions","Mainly","Where"], "person", "No observations reactions.")}</table><p class="note">Only reactions actually collected by Telegram-OSINT in the currently available data are shown.</p></div></details>
 
-<details class="card sect" id="reactions1" open><summary class="head"><i class="chev"></i><span class="t">Кому ставил реакции</span><b class="n">{len(reaction_out)}</b><span class="copy" role="button" tabindex="0" title="Скопировать таблицу">⧉</span></summary><div class="fold"><table><tr><th></th><th>Человек</th><th>@username</th><th>ID</th><th>Реакций</th><th>В основном</th><th>Где</th></tr>{_table(reaction_out, ["person","username","id","count","main","where"], ["Человек","@username","ID","Реакций","В основном","Где"], "person", "Нет исходящих реакций, доступных для отображения.")}</table></div></details>
+<details class="card sect" id="reactions1" open><summary class="head"><i class="chev"></i><span class="t">Reactions given</span><b class="n">{len(reaction_out)}</b><span class="copy" role="button" tabindex="0" title="Copy table">⧉</span></summary><div class="fold"><table><tr><th></th><th>Person</th><th>@username</th><th>ID</th><th>Reactions</th><th>Mainly</th><th>Where</th></tr>{_table(reaction_out, ["person","username","id","count","main","where"], ["Person","@username","ID","Reactions","Mainly","Where"], "person", "No outgoing reactions available for display.")}</table></div></details>
 
-<details class="card sect" id="groups" open><summary class="head"><i class="chev"></i><span class="t">Группы</span><b class="n">{len(group_rows)}</b><span class="copy" role="button" tabindex="0" title="Скопировать таблицу">⧉</span></summary><div class="fold"><table><tr><th></th><th>Чат</th><th>Как узнали</th><th>Дата записи</th></tr>{_table(group_rows, ["chat","how","date"], ["Чат","Как узнали","Дата записи"], "chat", "Нет наблюдений групп/чатов.")}</table></div></details>
+<details class="card sect" id="groups" open><summary class="head"><i class="chev"></i><span class="t">Groups</span><b class="n">{len(group_rows)}</b><span class="copy" role="button" tabindex="0" title="Copy table">⧉</span></summary><div class="fold"><table><tr><th></th><th>Chat</th><th>How found</th><th>Record date</th></tr>{_table(group_rows, ["chat","how","date"], ["Chat","How found","Record date"], "chat", "No group/chat observations.")}</table></div></details>
 
-<details class="card sect" id="admin" open><summary class="head"><i class="chev"></i><span class="t">Администрирование</span><b class="n">0</b><span class="copy" role="button" tabindex="0" title="Скопировать таблицу">⧉</span></summary><div class="fold"><p class="note">Администраторские права не были подтверждены собранными данными.</p></div></details>
+<details class="card sect" id="admin" open><summary class="head"><i class="chev"></i><span class="t">Administration</span><b class="n">0</b><span class="copy" role="button" tabindex="0" title="Copy table">⧉</span></summary><div class="fold"><p class="note">Administrative privileges were not confirmed by the collected data.</p></div></details>
 
-<details class="card sect" id="chats" open><summary class="head"><i class="chev"></i><span class="t">Сообщения по чатам</span><b class="n">{len(chat_rows)}</b><span class="copy" role="button" tabindex="0" title="Скопировать таблицу">⧉</span></summary><div class="fold"><table><tr><th></th><th>Чат</th><th>Сообщений</th></tr>{_table(chat_rows, ["chat","count"], ["Чат","Сообщений"], "chat", "Нет сообщений.")}</table></div></details>
+<details class="card sect" id="chats" open><summary class="head"><i class="chev"></i><span class="t">Messages by chat</span><b class="n">{len(chat_rows)}</b><span class="copy" role="button" tabindex="0" title="Copy table">⧉</span></summary><div class="fold"><table><tr><th></th><th>Chat</th><th>Messages</th></tr>{_table(chat_rows, ["chat","count"], ["Chat","Messages"], "chat", "No messages.")}</table></div></details>
 
-<details class="card sect" id="messages" open><summary class="head"><i class="chev"></i><span class="t">Сообщения</span><b class="n">{len(message_rows)}</b><span class="copy" role="button" tabindex="0" title="Скопировать таблицу">⧉</span></summary><div class="fold"><table><tr><th></th><th>Сообщение</th><th>Дата</th><th>Чат</th></tr>{_table(message_rows, ["message","date","chat"], ["Сообщение","Дата","Чат"], "message", "Нет сообщений, авторство которых подтверждено Telegram ID.")}</table><p class="note">Сообщение считается принадлежащим цели только при точном совпадении Telegram numeric ID автора с разрешённым ID цели.</p></div></details>
+<details class="card sect" id="messages" open><summary class="head"><i class="chev"></i><span class="t">Messages</span><b class="n">{len(message_rows)}</b><span class="copy" role="button" tabindex="0" title="Copy table">⧉</span></summary><div class="fold"><table><tr><th></th><th>Message</th><th>Date</th><th>Chat</th></tr>{_table(message_rows, ["message","date","chat"], ["Message","Date","Chat"], "message", "No messages with authorship confirmed by Telegram ID.")}</table><p class="note">A message is attributed to the target only when the author Telegram numeric ID exactly matches the resolved target ID.</p></div></details>
 
-<div id="indicators">{ioc_section("Индикаторы цели", iocs)}</div>
-<div id="context">{ioc_section("Контекстные индикаторы", context_iocs)}</div>
+<div id="indicators">{ioc_section("Target indicators", iocs)}</div>
+<div id="context">{ioc_section("Context indicators", context_iocs)}</div>
 
-<section id="evidence"><div class="sect-title"><div><h2>Свидетельства</h2><span class="muted">Каждая запись встроена в этот HTML; внешний сервис для просмотра не нужен.</span></div><span class="muted">{len(report.get("evidence", []))} записей</span></div>
-<div id="evidence-list">{"".join(evidence_cards) or '<p class="note">Свидетельства не собраны.</p>'}</div></section>
+<section id="evidence"><div class="sect-title"><div><h2>Evidence</h2><span class="muted">Each record is embedded in this HTML; no external service is required for viewing.</span></div><span class="muted">{len(report.get("evidence", []))} records</span></div>
+<div id="evidence-list">{"".join(evidence_cards) or '<p class="note">No evidence collected.</p>'}</div></section>
 
-{f'<section id="warnings"><div class="sect-title"><h2>Предупреждения</h2></div><div class="card"><ul>{warnings}</ul></div></section>' if warnings else ""}
-{f'<section id="diagnostics"><div class="sect-title"><h2>Диагностика коллектора</h2></div><div class="card"><ul>{"".join(f"<li>{_e(x)}</li>" for x in collection_warnings)}</ul></div></section>' if collection_warnings else ""}
+{f'<section id="warnings"><div class="sect-title"><h2>Warnings</h2></div><div class="card"><ul>{warnings}</ul></div></section>' if warnings else ""}
+{f'<section id="diagnostics"><div class="sect-title"><h2>Collector diagnostics</h2></div><div class="card"><ul>{"".join(f"<li>{_e(x)}</li>" for x in collection_warnings)}</ul></div></section>' if collection_warnings else ""}
 
-<section id="technical"><div class="sect-title"><h2>Технические сведения</h2></div><div class="card"><div class="meta"><span>Схема отчёта</span><code>1.9.0</code></div><div class="meta"><span>Область сбора</span><strong>{_e(report.get("collection_scope"))}</strong></div><div class="meta"><span>Часовой пояс</span><strong>Asia/Kolkata (IST, UTC+05:30)</strong></div><div class="meta"><span>Записей evidence</span><strong>{len(report.get("evidence", []))}</strong></div><div class="meta"><span>Ключи анализа</span><code>{_e(", ".join(sorted(a.keys())))}</code></div><p class="note">Этот документ автономен: данные, стили и логика интерфейса встроены в один HTML-файл. Он не требует удалённой таблицы отношений, внешней базы отчётов, удалённого JS/CSS или внешнего API для отображения.</p></div></section>
+<section id="technical"><div class="sect-title"><h2>Technical details</h2></div><div class="card"><div class="meta"><span>Report schema</span><code>1.9.0</code></div><div class="meta"><span>Collection scope</span><strong>{_e(report.get("collection_scope"))}</strong></div><div class="meta"><span>Timezone</span><strong>Asia/Kolkata (IST, UTC+05:30)</strong></div><div class="meta"><span>Evidence records</span><strong>{len(report.get("evidence", []))}</strong></div><div class="meta"><span>Analysis keys</span><code>{_e(", ".join(sorted(a.keys())))}</code></div><p class="note">This document is standalone: data, styles, and interface logic are embedded in a single HTML file. It does not require a remote relationship table, external report database, remote JS/CSS, or an external API for display.</p></div></section>
 
-<footer class="note">Telegram-OSINT · схема 1.9.0 · публичная информация · полнота исторических наблюдений не гарантируется.</footer>
+<footer class="note">Telegram-OSINT · schema 1.9.0 · public information · historical observation completeness is not guaranteed.</footer>
 </main></div>
 <script>
 (function(){{
