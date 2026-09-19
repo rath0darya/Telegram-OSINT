@@ -1,0 +1,90 @@
+{
+  "schema_version": "1.0.0",
+  "target_telegram_id": 7030758596,
+  "source": {
+    "type": "manual_benchmark_reference",
+    "description": "Imported manually from the supplied Teacher Sara.html benchmark report. These rows are report-only references and are not asserted as observations collected by Telegram-OSINT."
+  },
+  "relationships": [
+    {
+      "target_telegram_id": 7030758596,
+      "observed": "11.08.2026",
+      "relation": "reaction_received",
+      "person": "Global GVoice_CEO",
+      "telegram_id": 6575359185,
+      "username": "@gvoiice",
+      "reaction": "👍",
+      "source": "https://t.me/nxtjacuzzi/5088"
+    },
+    {
+      "target_telegram_id": 7030758596,
+      "observed": "04.09.2026",
+      "relation": "reaction_received",
+      "person": "Satish ❂🪬",
+      "telegram_id": 7503330227,
+      "username": "@Satish_1704",
+      "reaction": "😁",
+      "source": "https://t.me/Primeslooter_Discussion/233727"
+    },
+    {
+      "target_telegram_id": 7030758596,
+      "observed": "08.07.2026",
+      "relation": "reaction_received",
+      "person": "Banks Karim",
+      "telegram_id": 7687495849,
+      "username": "",
+      "reaction": "❤",
+      "source": "https://t.me/click_farm01/5664"
+    },
+    {
+      "target_telegram_id": 7030758596,
+      "observed": "10.08.2026",
+      "relation": "reaction_received",
+      "person": "Mint Smasher",
+      "telegram_id": 8870561518,
+      "username": "",
+      "reaction": "👍",
+      "source": "https://t.me/MistralFree/10289"
+    },
+    {
+      "target_telegram_id": 7030758596,
+      "observed": "10.08.2026",
+      "relation": "reaction_received",
+      "person": "Cookie Smasher",
+      "telegram_id": 8907878780,
+      "username": "",
+      "reaction": "❤",
+      "source": "https://t.me/metallamafree/13058"
+    },
+    {
+      "target_telegram_id": 7030758596,
+      "observed": "01.09.2026",
+      "relation": "reaction_given",
+      "person": "Own master😎💞",
+      "telegram_id": 5915965757,
+      "username": "@saitanstar01",
+      "reaction": "❤",
+      "source": "https://t.me/Primeslooter_Discussion/214980"
+    },
+    {
+      "target_telegram_id": 7030758596,
+      "observed": "01.09.2026",
+      "relation": "reaction_given",
+      "person": "⚡ 𝐘𝐎𝐆𝐈 🦅",
+      "telegram_id": 7041414649,
+      "username": "",
+      "reaction": "❤",
+      "source": "https://t.me/swigggy_loots/197104"
+    },
+    {
+      "target_telegram_id": 7030758596,
+      "observed": "06.06.2026",
+      "relation": "reaction_given",
+      "person": "IGNOU University",
+      "telegram_id": 7851438235,
+      "username": "",
+      "reaction": "❤",
+      "source": "https://t.me/osintchatt/5546"
+    }
+  ]
+}
