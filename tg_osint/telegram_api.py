@@ -81,6 +81,18 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
 
     client = TelegramClient(session, int(api_id), api_hash)
     await client.start()
+    import telethon
+    telethon_version = getattr(telethon, "__version__", "unknown")
+    if telethon_version != "unknown":
+        try:
+            major, minor = (int(x) for x in telethon_version.split(".")[:2])
+            if (major, minor) < (1, 45):
+                raise RuntimeError(
+                    f"Telethon {telethon_version} is too old for reliable from_user message search; "
+                    "install the project requirements (Telethon >=1.45,<2)."
+                )
+        except ValueError:
+            pass
     out: list[Evidence] = []
     try:
         entity = await client.get_entity(target)
@@ -429,6 +441,11 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                 except Exception as exc:
                     err = f"{type(exc).__name__}: {exc}"
                     global_author_errors.append(err)
+                    if "InputPeerEmpty" in err or "does not have any entity type" in err:
+                        # This is a Telethon compatibility/runtime capability failure.
+                        # Do not repeat an identical diagnostic; per-dialog ID filtering
+                        # below remains the safe fallback.
+                        break
                     if attempt < 2:
                         await asyncio.sleep(1.5 * (attempt + 1))
                     else:
@@ -460,7 +477,7 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
 
         source = f"https://t.me/{public_username}" if public_username else f"telegram://id/{entity_id}"
         entity_text = str(data)
-        out.insert(0, Evidence("telegram_api_public_entity", source, now_iso(), data.get("title") or data.get("display_name") or public_username or str(entity_id), entity_text, sha256_text(entity_text), {"entity": data, "collection": {"messages_requested": max(0, limit), "messages_seen": seen, "messages_with_text": with_text, "history_seen": seen - search_seen, "history_with_text": with_text - search_with_text, "search_seen": search_seen, "search_with_text": search_with_text, "search_errors": search_errors, "history_errors": history_errors, "global_author_seen": global_author_seen, "global_author_errors": global_author_errors, "global_reference_seen": global_reference_seen, "discovered_chat_count": len(discovered_chats), "chat_scan_seen": chat_scan_seen, "chat_scan_matches": chat_scan_matches, "membership_observations": membership_observations, "accessible_public_dialogs": accessible_public_dialogs, "id_dialog_scan_errors": id_dialog_scan_errors, "discovery_errors": discovery_errors, "resolved_telegram_id": entity_id, "identity_collection_mode": "telegram_numeric_id_first", "message_collection_rule": "exact_target_author_telegram_id_only", "target_input_peer": "InputPeerUser_with_access_hash"}, "iocs": extract_iocs(entity_text)}))
+        out.insert(0, Evidence("telegram_api_public_entity", source, now_iso(), data.get("title") or data.get("display_name") or public_username or str(entity_id), entity_text, sha256_text(entity_text), {"entity": data, "collection": {"messages_requested": max(0, limit), "messages_seen": seen, "messages_with_text": with_text, "history_seen": seen - search_seen, "history_with_text": with_text - search_with_text, "search_seen": search_seen, "search_with_text": search_with_text, "search_errors": search_errors, "history_errors": history_errors, "global_author_seen": global_author_seen, "global_author_errors": global_author_errors, "global_reference_seen": global_reference_seen, "discovered_chat_count": len(discovered_chats), "chat_scan_seen": chat_scan_seen, "chat_scan_matches": chat_scan_matches, "membership_observations": membership_observations, "accessible_public_dialogs": accessible_public_dialogs, "id_dialog_scan_errors": id_dialog_scan_errors, "discovery_errors": discovery_errors, "resolved_telegram_id": entity_id, "identity_collection_mode": "telegram_numeric_id_first", "message_collection_rule": "exact_target_author_telegram_id_only", "target_input_peer": "InputPeerUser_with_access_hash", "telethon_version": telethon_version}, "iocs": extract_iocs(entity_text)}))
     finally:
         await client.disconnect()
     return out
