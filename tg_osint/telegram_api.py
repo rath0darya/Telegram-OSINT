@@ -180,24 +180,54 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
                 )
             )
 
-        if limit > 0:
+        history_errors = []
+
+        async def collect_history():
             async for msg in client.iter_messages(entity, limit=limit):
                 await collect_one(msg)
 
-            # Also search Telegram's public message index for the resolved username.
-            # These are reference/mention observations, not proof that the target authored them.
-            if public_username:
+        async def collect_public_search():
+            if not public_username:
+                return
+            async for msg in client.iter_messages(
+                None, search=f"@{public_username}", limit=min(limit, 100)
+            ):
+                await collect_one(msg, search_context=True)
+
+        if limit > 0:
+            # Keep partial results when Telegram resets a connection. Each stage is
+            # isolated so a history/search failure does not discard the identity
+            # observation or results collected by the other stage.
+            for attempt in range(3):
                 try:
-                    async for msg in client.iter_messages(
-                        None, search=f"@{public_username}", limit=min(limit, 100)
-                    ):
-                        await collect_one(msg, search_context=True)
+                    await collect_history()
+                    break
                 except Exception as exc:
-                    search_errors.append(f"{type(exc).__name__}: {exc}")
+                    err = f"{type(exc).__name__}: {exc}"
+                    history_errors.append(err)
+                    if attempt < 2:
+                        await asyncio.sleep(1.5 * (attempt + 1))
+                    else:
+                        break
+
+            # These are reference/mention observations, not proof that the target
+            # authored the matching messages.
+            if public_username:
+                for attempt in range(3):
+                    try:
+                        await collect_public_search()
+                        break
+                    except Exception as exc:
+                        err = f"{type(exc).__name__}: {exc}"
+                        search_errors.append(err)
+                        if attempt < 2:
+                            await asyncio.sleep(1.5 * (attempt + 1))
+                        else:
+                            break
 
         source = f"https://t.me/{public_username}" if public_username else f"telegram://id/{entity_id}"
         entity_text = str(data)
-        out.insert(0, Evidence("telegram_api_public_entity", source, now_iso(), data.get("title") or data.get("display_name") or public_username or str(entity_id), entity_text, sha256_text(entity_text), {"entity": data, "collection": {"messages_requested": max(0, limit), "messages_seen": seen, "messages_with_text": with_text, "history_seen": seen - search_seen, "history_with_text": with_text - search_with_text, "search_seen": search_seen, "search_with_text": search_with_text, "search_errors": search_errors, "resolved_telegram_id": entity_id}, "iocs": extract_iocs(entity_text)}))
+        out.insert(0, Evidence("telegram_api_public_entity", source, now_iso(), data.get("title") or data.get("display_name") or public_username or str(entity_id), entity_text, sha256_text(entity_text), {"entity": data, "collection": {"messages_requested": max(0, limit), "messages_seen": seen, "messages_with_text": with_text, "history_seen": seen - search_seen, "history_with_text": with_text - search_with_text, "search_seen": search_seen, "search_with_text": search_with_text, "search_errors": search_errors, "history_errors": history_errors, "resolved_telegram_id": entity_id}, "iocs": extract_iocs(entity_text)}))
     finally:
         await client.disconnect()
     return out
