@@ -54,9 +54,14 @@ def _e(v):
 
 
 def _table(rows, columns, empty="No data observed."):
+    labels = {c: c.replace("_", " ").title() for c in columns}
     if not rows:
         return f'<tr><td colspan="{len(columns)}" class="muted">{_e(empty)}</td></tr>'
-    return "".join("<tr>" + "".join(f"<td>{_e(r.get(c))}</td>" for c in columns) + "</tr>" for r in rows)
+    return "".join(
+        "<tr>" + "".join(
+            f'<td data-label="{_e(labels[c])}">{_e(row.get(c))}</td>' for c in columns
+        ) + "</tr>" for row in rows
+    )
 
 
 def write_html(report, path):
@@ -74,6 +79,10 @@ def write_html(report, path):
     iocs = a.get("iocs", {})
     eng = a.get("engagement", {})
     collection = next((x.get("metadata", {}).get("collection", {}) for x in report.get("evidence", []) if x.get("source_type") == "telegram_api_public_entity"), {})
+    collection_warnings = []
+    for key in ("global_author_errors", "history_errors", "search_errors", "discovery_errors"):
+        for item in collection.get(key, []) or []:
+            collection_warnings.append(f"{key.replace("_", " ").title()}: {item}")
 
     usernames = [x for x in identifiers if x.get("identifier_type") == "telegram_username"]
     names = [x for x in identifiers if x.get("identifier_type") == "display_name"]
@@ -147,8 +156,8 @@ h1{{font-size:clamp(2rem,5vw,3rem);line-height:1.05;margin:.2em 0 .35em;letter-s
 .table-wrap{{overflow:auto;border:1px solid var(--line);border-radius:11px}}table{{width:100%;border-collapse:collapse;min-width:620px}}th,td{{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}}tr:last-child td{{border-bottom:0}}th{{color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;background:#ffffff05}}
 .evidence{{padding:0;overflow:hidden}}.evidence summary{{cursor:pointer;padding:14px 16px;display:flex;justify-content:space-between;gap:12px;list-style:none}}.evidence summary::-webkit-details-marker{{display:none}}.evidence summary:before{{content:"＋";color:var(--accent);font-weight:700;margin-right:8px}}.evidence[open] summary:before{{content:"−"}}.evidence-body{{padding:0 16px 16px}}pre{{white-space:pre-wrap;overflow-wrap:anywhere;background:#0003;padding:12px;border-radius:10px;max-height:520px;overflow:auto}}.meta{{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:9px 0;border-bottom:1px solid var(--line)}}
 .warn{{border-color:var(--danger);box-shadow:0 0 0 1px #ff6b7a22 inset}}footer{{margin-top:30px;padding-top:16px;border-top:1px solid var(--line)}}
-@media(max-width:650px){{main{{width:calc(100% - 12px);margin-top:8px}}.hero,.card,.ioc{{padding:13px;border-radius:13px}}.hero{{padding:20px}}.grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}.iocgrid{{grid-template-columns:1fr}}.meta{{display:block}}.meta strong,.meta code{{display:block;margin-top:3px;overflow-wrap:anywhere}}}}
-@media(max-width:420px){{.grid{{grid-template-columns:1fr}}h1{{font-size:2.15rem}}}}
+@media(max-width:760px){{main{{width:calc(100% - 12px);margin-top:8px}}.hero,.card,.ioc{{padding:13px;border-radius:13px}}.hero{{padding:20px}}.grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}.iocgrid{{grid-template-columns:1fr}}.meta{{display:block}}.meta strong,.meta code{{display:block;margin-top:3px;overflow-wrap:anywhere}}table{{min-width:0;display:block}}thead,tbody,tr{{display:block}}th{{display:none}}tr{{padding:9px 11px;border-bottom:1px solid var(--line)}}tr:last-child{{border-bottom:0}}td{{display:grid;grid-template-columns:minmax(105px,34%) 1fr;gap:10px;padding:6px 0;border:0}}td:before{{content:attr(data-label);color:var(--muted);font-size:.76rem;font-weight:600;text-transform:uppercase;letter-spacing:.03em}}.table-wrap{{overflow:visible}}}}
+@media(max-width:420px){{.grid{{grid-template-columns:1fr}}h1{{font-size:2.15rem}}td{{grid-template-columns:1fr;gap:2px}}td:before{{font-size:.7rem}}}}
 @media print{{body{{background:#fff;color:#111}}.hero,.card,.ioc,.evidence{{box-shadow:none;break-inside:avoid}}.nav{{display:none}}}}
 </style></head><body><main>
 <header class="hero"><div class="muted">Telegram-OSINT · public information only</div>
@@ -164,7 +173,8 @@ h1{{font-size:clamp(2rem,5vw,3rem);line-height:1.05;margin:.2em 0 .35em;letter-s
 <div class="card stat"><span class="muted">First observed</span><strong>{_e(entity.get("first_observed") or "Unknown")}</strong></div>
 <div class="card stat"><span class="muted">Last observed</span><strong>{_e(entity.get("last_observed") or "Unknown")}</strong></div>
 <div class="card stat"><span class="muted">Evidence</span><strong>{report["evidence_count"]}</strong></div>
-<div class="card stat"><span class="muted">Authored messages</span><strong>{a.get("authored_message_count",len(messages))}</strong></div>
+<div class="card stat"><span class="muted">Target-authored messages</span><strong>{a.get("authored_message_count",0)}</strong></div>
+<div class="card stat"><span class="muted">Collected messages</span><strong>{a.get("message_count",0)}</strong></div>
 <div class="card stat"><span class="muted">Observed chats</span><strong>{a.get("chat_count",0)}</strong></div>
 <div class="card stat"><span class="muted">Relationships</span><strong>{len(relationships)}</strong></div>
 </section>
@@ -179,7 +189,14 @@ h1{{font-size:clamp(2rem,5vw,3rem);line-height:1.05;margin:.2em 0 .35em;letter-s
 <div class="card wide"><h2>Groups &amp; channels observed</h2><div class="table-wrap"><table><tr><th>Observed (IST)</th><th>Chat</th><th>Username</th><th>Type</th><th>Status</th><th>Role</th></tr>{_table(membership_rows,["observed","chat","username","type","status","role"],"No membership observations collected.")}</table></div></div>
 </section>
 
-<section class="card"><h2>Collection coverage</h2><div class="grid"><div><span class="muted">History seen</span><br><strong>{collection.get("history_seen",0)}</strong></div><div><span class="muted">Search references seen</span><br><strong>{collection.get("search_seen",0)}</strong></div><div><span class="muted">Search references with text</span><br><strong>{collection.get("search_with_text",0)}</strong></div><div><span class="muted">Reaction records</span><br><strong>{len(reactions)}</strong></div><div><span class="muted">Discovered public chats</span><br><strong>{collection.get("discovered_chat_count",0)}</strong></div><div><span class="muted">Chat scan messages</span><br><strong>{collection.get("chat_scan_seen",0)}</strong></div><div><span class="muted">Target-author matches</span><br><strong>{collection.get("chat_scan_matches",0)}</strong></div></div><p class="muted">History/search collection is retried up to three times. A failed stage is reported separately from a successful identity/profile observation. Search results are reference observations; they do not prove that the target authored those messages. Collection errors are surfaced rather than silently discarded.</p></section>
+<section class="card coverage"><h2>Collection coverage</h2><div class="grid"><div><span class="muted">History seen</span><br><strong>{collection.get("history_seen",0)}</strong></div><div><span class="muted">Search references seen</span><br><strong>{collection.get("search_seen",0)}</strong></div><div><span class="muted">Search references with text</span><br><strong>{collection.get("search_with_text",0)}</strong></div><div><span class="muted">Reaction records</span><br><strong>{len(reactions)}</strong></div><div><span class="muted">Discovered public chats</span><br><strong>{collection.get("discovered_chat_count",0)}</strong></div><div><span class="muted">Chat scan messages</span><br><strong>{collection.get("chat_scan_seen",0)}</strong></div><div><span class="muted">Target-author matches</span><br><strong>{collection.get("chat_scan_matches",0)}</strong></div></div><p class="muted">History/search collection is retried up to three times. A failed stage is reported separately from a successful identity/profile observation. Search results are reference observations; they do not prove that the target authored those messages. Collection errors are surfaced rather than silently discarded.</p></section>
+
+<section class="card coverage"><h2>Data quality</h2><div class="grid">
+<div><span class="muted">Target-author matches</span><br><strong>{collection.get("chat_scan_matches",0)}</strong></div>
+<div><span class="muted">Unattributed messages</span><br><strong>{a.get("unattributed_message_count",0)}</strong></div>
+<div><span class="muted">Membership observations</span><br><strong>{collection.get("membership_observations",0)}</strong></div>
+<div><span class="muted">Discovery errors</span><br><strong>{len(collection.get("discovery_errors",[]) or [])}</strong></div>
+</div><p class="muted">Counts are observations available to the authenticated Telegram session. A zero means no observation was collected in the accessible scope; it is not proof that the underlying event never happened.</p></section>
 
 <section id="relationships" class="card"><h2>Observed relationships</h2><p class="muted">Relations come from explicit Telegram message metadata or public mentions; ambiguous text is not treated as identity proof.</p>
 <div class="table-wrap"><table><tr><th>Observed (IST)</th><th>Relation</th><th>Telegram ID</th><th>Username</th><th>Source</th></tr>{_table(relation_rows,["observed","relation","id","username","source"],"No relationships observed.")}</table></div></section>
@@ -190,6 +207,7 @@ h1{{font-size:clamp(2rem,5vw,3rem);line-height:1.05;margin:.2em 0 .35em;letter-s
 
 <section id="evidence"><h2>Collection evidence</h2>{"".join(evidence_cards) or '<div class="card muted">No evidence was collected.</div>'}</section>
 {f'<section><div class="card warn"><h2>Collection warnings</h2><ul>{warnings}</ul></div></section>' if warnings else ""}
+{f'<section><div class="card warn"><h2>Collector diagnostics</h2><ul>{"".join(f"<li>{_e(x)}</li>" for x in collection_warnings)}</ul></div></section>' if collection_warnings else ""}
 <footer class="muted">Report schema 1.7.0 · Stored timestamps remain machine-readable; report timestamps are displayed in IST (UTC+05:30) · public-information-only collection · historical completeness is not guaranteed.</footer>
 </main></body></html>"""
     p.write_text(doc, encoding="utf-8")
