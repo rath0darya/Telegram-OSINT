@@ -82,7 +82,7 @@ def write_html(report, path):
     collection_warnings = []
     for key in ("global_author_errors", "history_errors", "search_errors", "discovery_errors"):
         for item in collection.get(key, []) or []:
-            collection_warnings.append(f"{key.replace("_", " ").title()}: {item}")
+            collection_warnings.append(f"{key.replace('_', ' ').title()}: {item}")
 
     usernames = [x for x in identifiers if x.get("identifier_type") == "telegram_username"]
     names = [x for x in identifiers if x.get("identifier_type") == "display_name"]
