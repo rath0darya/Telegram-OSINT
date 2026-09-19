@@ -202,23 +202,41 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
 
         async def collect_global_author_messages():
             nonlocal global_author_seen
-            # Keep this as an optional accelerator. Telegram may reject the
-            # from_user peer for global search even after entity resolution.
-            author_peer = await client.get_input_entity(entity)
-            async for msg in client.iter_messages(
-                None, from_user=author_peer, limit=min(limit, 100)
-            ):
-                global_author_seen += 1
-                await collect_one(msg, search_context=False)
+            candidates = []
+            if public_username:
+                candidates.append(public_username)
+            candidates.append(entity)
+            access_hash = getattr(entity, "access_hash", None)
+            if access_hash is not None and isinstance(entity, types.User):
+                candidates.append(types.InputPeerUser(user_id=entity.id, access_hash=access_hash))
+            last_error = None
+            for index, author_peer in enumerate(candidates):
+                try:
+                    local_seen = 0
+                    async for msg in client.iter_messages(
+                        None, from_user=author_peer, limit=min(limit, 3000)
+                    ):
+                        local_seen += 1
+                        global_author_seen += 1
+                        await collect_one(msg, search_context=False)
+                    if local_seen or index < len(candidates) - 1:
+                        return
+                except Exception as exc:
+                    last_error = exc
+            if last_error:
+                raise last_error
 
         async def collect_public_search():
             nonlocal global_reference_seen
             if not public_username:
                 return
             seen_keys = set()
-            for query in (f"@{public_username}", public_username):
+            queries = [f"@{public_username}", public_username]
+            if data.get("display_name"):
+                queries.append(data["display_name"])
+            for query in dict.fromkeys(queries):
                 async for msg in client.iter_messages(
-                    None, search=query, limit=min(limit, 100)
+                    None, search=query, limit=min(limit, 3000)
                 ):
                     key = (getattr(msg, "chat_id", None), getattr(msg, "id", None))
                     if key in seen_keys:
