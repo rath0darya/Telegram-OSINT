@@ -143,6 +143,9 @@ class IntelligenceDB:
                 if author_id and isinstance(reply_meta, dict):
                     reply_id = self._entity(reply_meta.get("id"), reply_meta.get("username"), reply_meta.get("display_name"), "user", ev.collected_at, reply_meta)
                     self._edge(author_id, reply_id, chat, msg_id, "replied_to", ev)
+                if author_id and m.get("search_context") and m.get("resolved_target_id") is not None:
+                    target_id = self._entity(m.get("resolved_target_id"), None, None, "user", ev.collected_at, {})
+                    self._edge(author_id, target_id, chat, msg_id, "search_hit_for_target", ev)
                 for mention in m.get("mentions", []):
                     mention_entity = mention if isinstance(mention, dict) else {"username": str(mention).lstrip("@")}
                     mid = self._entity(mention_entity.get("id"), mention_entity.get("username"), mention_entity.get("display_name"), "user", ev.collected_at, mention_entity)
