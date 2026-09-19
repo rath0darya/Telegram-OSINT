@@ -39,7 +39,7 @@ def _e(v):
         return ""
     value = str(v)
     # Normalize ISO timestamps to a compact, consistent UTC display.
-    if value.endswith("+00:00") && "T" in value:
+    if value.endswith("+00:00") and "T" in value:
         value = value[:-6] + " UTC"
         value = value.replace("T", " ")
     return html.escape(value, quote=True)
