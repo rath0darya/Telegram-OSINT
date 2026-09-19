@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS edges (id INTEGER PRIMARY KEY, source_entity_id INTEG
 CREATE INDEX IF NOT EXISTS idx_entities_username ON entities(username);
 CREATE INDEX IF NOT EXISTS idx_identifiers_value ON identifiers(value);
 CREATE INDEX IF NOT EXISTS idx_messages_date ON messages(message_date);
-CREATE INDEX IF NOT EXISTS idx_messages_author ON messages(author_entity_id);
+
 CREATE INDEX IF NOT EXISTS idx_observations_time ON observations(observed_at);
 CREATE INDEX IF NOT EXISTS idx_memberships_entity ON memberships(entity_id);
 CREATE INDEX IF NOT EXISTS idx_memberships_chat ON memberships(chat_id);
@@ -37,6 +37,7 @@ class IntelligenceDB:
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
         self._migrate()
+        self.db.executescript("""CREATE INDEX IF NOT EXISTS idx_messages_author ON messages(author_entity_id);""")
         self.db.commit()
 
     def _migrate(self):
