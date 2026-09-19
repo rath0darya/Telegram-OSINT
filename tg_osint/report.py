@@ -222,7 +222,8 @@ h1{{font-size:clamp(2rem,5vw,3rem);line-height:1.05;margin:.2em 0 .35em;letter-s
 <section id="relationships" class="card"><h2>Observed relationships</h2><p class="muted">Relations come from explicit Telegram message metadata or public mentions; ambiguous text is not treated as identity proof.</p>
 <div class="table-wrap"><table><tr><th>Observed (IST)</th><th>Relation</th><th>Telegram ID</th><th>Username</th><th>Source</th></tr>{_table(relation_rows,["observed","relation","id","username","source"],"No relationships observed.")}</table></div></section>
 
-<section id="indicators"><h2>Indicators &amp; references</h2><div class="iocgrid">{"".join(ioc_cards)}</div></section>
+<section id="indicators"><h2>Target indicators</h2><p class="muted">Only indicators extracted from messages authored by the exact resolved Telegram ID are attributed to the target.</p><div class="iocgrid">{"".join(ioc_cards)}</div></section>
+<section class="card"><h2>Contextual indicators — not attributed to target</h2><p class="muted">These indicators come from collected messages whose author did not exactly match Telegram ID {resolved}. They are preserved as contextual evidence and must not be treated as the target's indicators.</p><div class="iocgrid">{"".join(context_ioc_cards)}</div></section>
 <section class="grid"><div class="card"><h2>Engagement</h2><p>Views: <strong>{eng.get("total_views",0)}</strong><br>Average views: <strong>{eng.get("average_views",0)}</strong><br>Forwards: <strong>{eng.get("total_forwards",0)}</strong></p></div>
 <div class="card"><h2>Activity by day</h2><div class="table-wrap"><table><tr><th>Date</th><th>Messages</th></tr>{_table([{"date":k,"count":v} for k,v in a.get("activity_by_day",{}).items()],["date","count"],"No dated messages.")}</table></div></div></section>
 
