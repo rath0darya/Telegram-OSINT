@@ -128,6 +128,9 @@ def write_html(report, path):
         body = "".join(f"<li>{_e(v)}</li>" for v in vals) or '<li class="muted">None observed</li>'
         context_ioc_cards.append(f'<article class="ioc context-ioc"><div class="ioc-head"><h3>{label}</h3><strong>{len(vals)}</strong></div><ul>{body}</ul></article>')
 
+    resolved = report.get("resolved_telegram_id")
+    resolved_display = resolved if resolved is not None else "Unknown"
+
     evidence_cards = []
     for i, e in enumerate(report["evidence"], 1):
         metadata = e.get("metadata") or {}
@@ -199,7 +202,7 @@ h1{{font-size:clamp(2rem,5vw,3rem);line-height:1.05;margin:.2em 0 .35em;letter-s
 <nav class="nav"><a href="#identity">Identity</a><a href="#history">History</a><a href="#activity">Activity</a><a href="#relationships">Relationships</a><a href="#indicators">Indicators</a><a href="#evidence">Evidence</a></nav></header>
 
 <section id="identity" class="grid">
-<div class="card stat"><span class="muted">Stable Telegram ID</span><strong>{_e(resolved)}</strong></div>
+<div class="card stat"><span class="muted">Stable Telegram ID</span><strong>{_e(resolved_display)}</strong></div>
 <div class="card stat"><span class="muted">First observed</span><strong>{_e(entity.get("first_observed") or "Unknown")}</strong></div>
 <div class="card stat"><span class="muted">Last observed</span><strong>{_e(entity.get("last_observed") or "Unknown")}</strong></div>
 <div class="card stat"><span class="muted">Evidence</span><strong>{report["evidence_count"]}</strong></div>
