@@ -62,71 +62,111 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
 
         seen = 0
         with_text = 0
+
+        async def collect_one(msg, search_context=False):
+            nonlocal seen, with_text
+            seen += 1
+            body = msg.message or ""
+            if not body:
+                return
+            with_text += 1
+
+            author = None
+            try:
+                sender = await msg.get_sender()
+                if sender is not None:
+                    author = _entity_data(sender)
+            except Exception:
+                pass
+
+            forward_from = None
+            try:
+                sender_id = getattr(getattr(msg, "forward", None), "sender_id", None)
+                if sender_id:
+                    sender = await client.get_entity(sender_id)
+                    forward_from = _entity_data(sender)
+            except Exception:
+                pass
+
+            reply_to_author = None
+            try:
+                reply = await msg.get_reply_message()
+                if reply is not None:
+                    sender = await reply.get_sender()
+                    if sender is not None:
+                        reply_to_author = _entity_data(sender)
+            except Exception:
+                pass
+
+            mentions = []
+            for ent in getattr(msg, "entities", None) or []:
+                if hasattr(ent, "user_id"):
+                    try:
+                        mentioned = await client.get_entity(ent.user_id)
+                        mentions.append(_entity_data(mentioned))
+                    except Exception:
+                        pass
+                elif ent.__class__.__name__.lower().endswith("messageentitymention"):
+                    offset = getattr(ent, "offset", 0)
+                    length = getattr(ent, "length", 0)
+                    token = body[offset:offset + length]
+                    if re.fullmatch(r"@[A-Za-z0-9_]{5,32}", token):
+                        mentions.append({"username": token[1:]})
+
+            chat = entity
+            try:
+                resolved_chat = await msg.get_chat()
+                if resolved_chat is not None:
+                    chat = resolved_chat
+            except Exception:
+                pass
+            chat_data = _chat_data(chat)
+            chat_username = chat_data.get("username")
+            source = (
+                f"https://t.me/{chat_username}/{msg.id}"
+                if chat_username
+                else f"telegram://message/{chat_data.get('id')}/{msg.id}"
+            )
+            payload = {
+                "message_id": msg.id,
+                "date": msg.date.isoformat() if msg.date else None,
+                "text": body[:20000],
+                "views": getattr(msg, "views", None),
+                "forwards": getattr(msg, "forwards", None),
+                "chat": chat_data,
+                "author": author,
+                "reply_to_message_id": getattr(getattr(msg, "reply_to", None), "reply_to_msg_id", None),
+                "reply_to_author": reply_to_author,
+                "forward_from": forward_from,
+                "mentions": mentions,
+                "search_context": search_context,
+            }
+            out.append(
+                Evidence(
+                    "telegram_public_message",
+                    source,
+                    now_iso(),
+                    f"Public message {msg.id}",
+                    body[:20000],
+                    sha256_text(str(payload)),
+                    {**payload, "iocs": extract_iocs(body)},
+                )
+            )
+
         if limit > 0:
             async for msg in client.iter_messages(entity, limit=limit):
-                seen += 1
-                body = msg.message or ""
-                if not body:
-                    continue
-                with_text += 1
+                await collect_one(msg)
 
-                author = None
+            # Also search Telegram's public message index for the resolved username.
+            # These are reference/mention observations, not proof that the target authored them.
+            if public_username:
                 try:
-                    sender = await msg.get_sender()
-                    if sender is not None:
-                        author = _entity_data(sender)
+                    async for msg in client.iter_messages(
+                        None, search=f"@{public_username}", limit=min(limit, 100)
+                    ):
+                        await collect_one(msg, search_context=True)
                 except Exception:
                     pass
-
-                forward_from = None
-                try:
-                    sender_id = getattr(getattr(msg, "forward", None), "sender_id", None)
-                    if sender_id:
-                        sender = await client.get_entity(sender_id)
-                        forward_from = _entity_data(sender)
-                except Exception:
-                    pass
-
-                reply_to_author = None
-                try:
-                    reply = await msg.get_reply_message()
-                    if reply is not None:
-                        sender = await reply.get_sender()
-                        if sender is not None:
-                            reply_to_author = _entity_data(sender)
-                except Exception:
-                    pass
-
-                mentions = []
-                for ent in getattr(msg, "entities", None) or []:
-                    if hasattr(ent, "user_id"):
-                        try:
-                            mentioned = await client.get_entity(ent.user_id)
-                            mentions.append(_entity_data(mentioned))
-                        except Exception:
-                            pass
-                    elif ent.__class__.__name__.lower().endswith("messageentitymention"):
-                        offset = getattr(ent, "offset", 0)
-                        length = getattr(ent, "length", 0)
-                        token = body[offset:offset + length]
-                        if re.fullmatch(r"@[A-Za-z0-9_]{5,32}", token):
-                            mentions.append({"username": token[1:]})
-
-                payload = {
-                    "message_id": msg.id,
-                    "date": msg.date.isoformat() if msg.date else None,
-                    "text": body[:20000],
-                    "views": getattr(msg, "views", None),
-                    "forwards": getattr(msg, "forwards", None),
-                    "chat": _chat_data(entity),
-                    "author": author,
-                    "reply_to_message_id": getattr(getattr(msg, "reply_to", None), "reply_to_msg_id", None),
-                    "reply_to_author": reply_to_author,
-                    "forward_from": forward_from,
-                    "mentions": mentions,
-                }
-                source = f"https://t.me/{public_username}/{msg.id}" if public_username else f"telegram://id/{entity_id}/{msg.id}"
-                out.append(Evidence("telegram_public_message", source, now_iso(), f"Public message {msg.id}", body[:20000], sha256_text(str(payload)), {**payload, "iocs": extract_iocs(body)}))
 
         source = f"https://t.me/{public_username}" if public_username else f"telegram://id/{entity_id}"
         entity_text = str(data)
