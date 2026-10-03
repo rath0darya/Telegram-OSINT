@@ -24,9 +24,9 @@ def _entity_data(entity: Any) -> dict:
 
 def _public_chat_type(entity: Any) -> str:
     kind = type(entity).__name__.lower()
-    if kind == "chat":
+    if kind in {"chat", "fakechat"}:
         return "group"
-    if "channel" in kind:
+    if "channel" in kind or kind in {"fakebroadcast", "fakechannel"}:
         if getattr(entity, "broadcast", False):
             return "channel"
         return "supergroup"
