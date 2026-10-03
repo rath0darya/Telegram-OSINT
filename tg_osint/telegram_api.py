@@ -269,58 +269,92 @@ async def _collect(target: str | int, limit: int = 0) -> list[Evidence]:
         global_author_seen = 0
         global_author_errors = []
         global_reference_seen = 0
-        target_input = await client.get_input_entity(entity)
+        target_input = _target_input_peer(entity, int(entity_id), types)
 
         async def collect_global_author_messages():
-            nonlocal global_author_seen
-            # Telegram exposes sender filtering through messages.search,
-            # whose InputPeerEmpty peer covers all private chats and normal groups.
-            # Telethon's iter_messages(None, from_user=...) historically routes
-            # this path through an InputPeerEmpty entity and may fail while trying
-            # to resolve that empty peer. Use the raw MTProto request instead.
-            # This is deliberately separate from messages.searchGlobal: Telegram's
-            # global-search constructor has no from_id field, so it cannot perform
-            # a server-side author filter across public channels.
-            queries = []
-            if public_username:
-                queries.extend([public_username, f"@{public_username}"])
-            if data.get("display_name"):
-                queries.append(data["display_name"])
-            queries = list(dict.fromkeys(q for q in queries if q))
-            if not queries:
-                return 0
+            """
+            Primary ID-centric global author collection.
 
-            total = 0
-            for query in queries:
-                try:
-                    # Use messages.search(peer=inputPeerEmpty, from_id=...)
-                    # directly. Telegram documents InputPeerEmpty here as the
-                    # scope for all private chats and normal groups; channels
-                    # require per-channel searches/scans instead.
-                    result = await client(functions.messages.SearchRequest(
-                        peer=types.InputPeerEmpty(),
-                        q=query,
-                        from_id=target_input,
-                        filter=types.InputMessagesFilterEmpty(),
-                        min_date=None,
-                        max_date=None,
-                        offset_id=0,
-                        add_offset=0,
-                        limit=min(limit, 100),
-                        max_id=0,
-                        min_id=0,
-                        hash=0,
-                    ))
-                    for msg in getattr(result, "messages", None) or []:
-                        total += 1
-                        global_author_seen += 1
-                        await collect_one(msg, search_context=False, target_author_only=True)
-                except Exception as exc:
+            Telethon >=1.45 supports iter_messages(None, from_user=...), which
+            maps to Telegram's server-side sender filter without treating the
+            InputPeerEmpty search scope as a user entity. This is the preferred
+            path because it does not depend on the target username/name appearing
+            in message text.
+
+            The raw messages.search fallback is retained for runtimes where the
+            high-level iterator is rejected. Even there, the authoritative
+            filter remains from_id=target_input; text queries are only a transport
+            fallback and never an identity rule.
+            """
+            nonlocal global_author_seen
+
+            try:
+                count = 0
+                async for msg in client.iter_messages(
+                    None,
+                    from_user=target_input,
+                    limit=limit,
+                ):
+                    count += 1
+                    global_author_seen += 1
+                    await collect_one(
+                        msg,
+                        search_context=False,
+                        target_author_only=True,
+                    )
+                return count
+            except Exception as primary_exc:
+                # Keep the primary failure visible, but try the lower-level
+                # request before giving up. This fallback is still exact-ID
+                # constrained and therefore cannot turn username/name matches
+                # into target authorship.
+                fallback_queries = []
+                if public_username:
+                    fallback_queries.extend([public_username, f"@{public_username}"])
+                if data.get("display_name"):
+                    fallback_queries.append(data["display_name"])
+                fallback_queries = list(dict.fromkeys(q for q in fallback_queries if q))
+
+                if not fallback_queries:
                     raise RuntimeError(
-                        f"ID-based accessible-chat author search failed for Telegram ID {entity_id} "
-                        f"with query {query!r}: {type(exc).__name__}: {exc}"
-                    ) from exc
-            return total
+                        f"ID-centric global author search failed for Telegram ID {entity_id}: "
+                        f"{type(primary_exc).__name__}: {primary_exc}"
+                    ) from primary_exc
+
+                fallback_error = None
+                for query in fallback_queries:
+                    try:
+                        result = await client(functions.messages.SearchRequest(
+                            peer=types.InputPeerEmpty(),
+                            q=query,
+                            from_id=target_input,
+                            filter=types.InputMessagesFilterEmpty(),
+                            min_date=None,
+                            max_date=None,
+                            offset_id=0,
+                            add_offset=0,
+                            limit=min(limit, 100),
+                            max_id=0,
+                            min_id=0,
+                            hash=0,
+                        ))
+                        messages = getattr(result, "messages", None) or []
+                        for msg in messages:
+                            global_author_seen += 1
+                            await collect_one(
+                                msg,
+                                search_context=False,
+                                target_author_only=True,
+                            )
+                        return len(messages)
+                    except Exception as exc:
+                        fallback_error = exc
+
+                raise RuntimeError(
+                    f"ID-centric global author search failed for Telegram ID {entity_id}: "
+                    f"primary={type(primary_exc).__name__}: {primary_exc}; "
+                    f"fallback={type(fallback_error).__name__}: {fallback_error}"
+                ) from primary_exc
 
         async def scan_accessible_public_dialogs_by_id():
             nonlocal chat_scan_seen, chat_scan_matches
