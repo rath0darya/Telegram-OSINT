@@ -54,12 +54,15 @@ def main():
         intel.close()
         return 0
 
-    if not a.target:
-        p.error("target is required unless --search or --history is used")
-    try:
-        t = normalize_target(a.target)
-    except ValueError as e:
-        p.error(str(e))
+    if not a.target and not a.group:
+        p.error("target is required unless --group, --search or --history is used")
+    if a.group:
+        t = normalize_target(a.group)
+    else:
+        try:
+            t = normalize_target(a.target)
+        except ValueError as e:
+            p.error(str(e))
     if a.messages < 0:
         p.error("--messages must be >= 0")
     if a.participants < 0 or a.participants > 200:
