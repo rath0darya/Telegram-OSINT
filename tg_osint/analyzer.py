@@ -13,6 +13,7 @@ def analyze_evidence(evidence: list, target_id: int | None = None) -> dict:
     They never promote a message to target-authored evidence.
     """
     messages=[e for e in evidence if e.source_type=="telegram_public_message"]
+    group_mode = any((e.metadata or {}).get("public_group_context") for e in messages) and target_id is None
     def author_id(e):
         author=(e.metadata or {}).get("author")
         return author.get("id") if isinstance(author, dict) else None
@@ -29,13 +30,16 @@ def analyze_evidence(evidence: list, target_id: int | None = None) -> dict:
     reference_iocs=message_iocs(non_authored)
     chats={((e.metadata or {}).get("chat") or {}).get("id") for e in authored if ((e.metadata or {}).get("chat") or {}).get("id") is not None}
     all_chats={((e.metadata or {}).get("chat") or {}).get("id") for e in messages if ((e.metadata or {}).get("chat") or {}).get("id") is not None}
-    combined="\\n".join(e.text for e in authored)
-    iocs=target_iocs
+    scope_messages = messages if group_mode else authored
+    combined="\\n".join(e.text for e in scope_messages)
+    iocs=message_iocs(scope_messages)
+    if group_mode:
+        target_iocs=iocs
     words=Counter(w.lower() for w in WORD_RE.findall(combined))
     hashtags=Counter(x.lower() for x in HASHTAG_RE.findall(combined))
-    mentions=Counter(i.lower() for e in authored for i in extract_iocs(e.text)["usernames"])
+    mentions=Counter(i.lower() for e in scope_messages for i in extract_iocs(e.text)["usernames"])
     dates=Counter(); views=[]; forwards=[]
-    for e in authored:
+    for e in scope_messages:
         m=e.metadata or {}; d=m.get("date")
         if d:
             try: dates[datetime.fromisoformat(d.replace("Z","+00:00")).strftime("%Y-%m-%d")]+=1
