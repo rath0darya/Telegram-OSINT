@@ -16,6 +16,9 @@ def main():
     p = argparse.ArgumentParser(prog="tg-osint", description="Telegram public-information OSINT collector for Termux.")
     p.add_argument("target", nargs="?")
     p.add_argument("--messages", type=int, default=0, help="Collect up to N accessible public messages")
+    p.add_argument("--group", default="", help="Run standalone Public Group OSINT on a public @username or t.me link")
+    p.add_argument("--participants", type=int, default=0, help="For --group, collect up to N publicly exposed participants (max 200)")
+    p.add_argument("--admins", action="store_true", help="With --group --participants, collect publicly exposed admins only")
     p.add_argument("--timeout", type=int, default=15)
     p.add_argument("--rate", type=float, default=1.0)
     p.add_argument("--db", default="telegram_osint", help="MariaDB database name (TELEGRAM_OSINT_DB_NAME)")
@@ -59,6 +62,14 @@ def main():
         p.error(str(e))
     if a.messages < 0:
         p.error("--messages must be >= 0")
+    if a.participants < 0 or a.participants > 200:
+        p.error("--participants must be between 0 and 200")
+    if a.admins and not a.group:
+        p.error("--admins requires --group")
+    if a.group and a.target:
+        p.error("Use either positional target or --group, not both")
+    if a.group and a.messages == 0:
+        a.messages = 500
 
     Path(a.out).mkdir(parents=True, exist_ok=True)
     db = CaseDB(a.db)
@@ -67,13 +78,29 @@ def main():
     ev = []
     errors = []
 
-    if t["url"]:
+    if a.group:
+        try:
+            from .public_group import collect_public_group
+            group_target = a.group.strip()
+            group_info = normalize_target(group_target)
+            api_target = group_info["username"] or group_target
+            ev.extend(collect_public_group(api_target, a.messages, a.participants, a.admins))
+            t = {
+                "target_type": "public_group",
+                "telegram_id": next(((x.metadata or {}).get("entity", {}).get("id") for x in ev if x.source_type == "telegram_public_group"), None),
+                "username": group_info["username"],
+                "handle": f"@{group_info['username']}" if group_info["username"] else group_target,
+                "url": f"https://t.me/{group_info['username']}" if group_info["username"] else None,
+            }
+        except Exception as e:
+            errors.append(f"public group api: {type(e).__name__}: {e}")
+    elif t["url"]:
         try:
             ev.append(fetch_public_page(t["url"], a.timeout, a.rate))
         except Exception as e:
             errors.append(f"public page: {type(e).__name__}: {e}")
 
-    if a.messages:
+    if a.messages and not a.group:
         try:
             from .telegram_api import collect_public
             api_target = t["telegram_id"] if t["target_type"] == "telegram_id" else t["username"]
@@ -92,6 +119,16 @@ def main():
     intel.finish_run(run_id, len(ev))
     resolved_id = next(((x.metadata or {}).get("entity", {}).get("id") for x in ev if x.source_type == "telegram_api_public_entity" and isinstance((x.metadata or {}).get("entity"), dict)), None)
     analysis = {} if a.no_analysis else analyze_evidence(ev, int(resolved_id) if resolved_id is not None else None)
+    if a.group:
+        group_messages = [x for x in ev if x.source_type == "telegram_public_message"]
+        authors = {(x.metadata or {}).get("author", {}).get("id") for x in group_messages if isinstance((x.metadata or {}).get("author"), dict) and (x.metadata or {}).get("author", {}).get("id") is not None}
+        analysis.update({
+            "collection_mode": "public_group_osint",
+            "message_count": len(group_messages),
+            "group_author_count": len(authors),
+            "participant_observation_count": len([x for x in ev if x.source_type == "telegram_public_group_participant"]),
+            "admin_observation_count": len([x for x in ev if x.source_type == "telegram_public_group_participant" and (x.metadata or {}).get("admins_only")]),
+        })
     report = build_report(t, cid, ev, errors, analysis, intel=intel)
     hp = str(Path(a.out) / f"{t['handle'].replace('-', 'neg-')}_{cid}.html")
     write_html(report, hp)
@@ -100,6 +137,12 @@ def main():
 
     collection = next((x.metadata.get("collection", {}) for x in ev if x.source_type == "telegram_api_public_entity"), {})
     print(f"Target      : {t['handle']}")
+    if a.group:
+        print("Collection  : Public Group OSINT")
+        print(f"Group messages: {analysis.get('message_count', 0)}")
+        print(f"Unique authors: {analysis.get('group_author_count', 0)}")
+        print(f"Participants observed: {analysis.get('participant_observation_count', 0)}")
+        print(f"Admins observed: {analysis.get('admin_observation_count', 0)}")
     print(f"Evidence    : {len(ev)}")
     print(f"Messages    : {analysis.get('message_count', 0)}")
     print(f"Case ID     : {cid}")
