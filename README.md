@@ -40,6 +40,10 @@ Membership/admin information is recorded only when Telegram actually exposes the
 - Maintain evidence-backed relationship edges and deterministic SHA-256 provenance
 - Build observed mentioned/replied/forwarded relationship edges
 - Store membership observations supplied by collection code
+- **Standalone Public Group OSINT** for public groups, supergroups and channels
+- Collect recent public-group messages with authors, replies, mentions, media, views, forwards, reactions and IOCs
+- Optionally collect up to 200 publicly exposed participants or admins when Telegram exposes the participant list
+- Public-group participant observations are stored as evidence-backed membership observations
 - Persistent MariaDB historical intelligence database
 - Search by username, name or Telegram ID
 - Standalone HTML investigation reports containing their own collected evidence
@@ -79,6 +83,22 @@ Optional Telegram API access uses TELEGRAM_API_ID and TELEGRAM_API_HASH in a loc
     ./tg-osint 123456789 --messages 200
 
 Username collection resolves the current public username to the Telegram ID first. Subsequent runs can therefore associate newly observed usernames with the same numeric identity.
+
+## Public Group OSINT
+
+Run a standalone public-group investigation without supplying a person target:
+
+    ./tg-osint --group @publicgroup --messages 500
+
+Collect a bounded sample of publicly exposed participants:
+
+    ./tg-osint --group @publicgroup --messages 500 --participants 100
+
+Collect publicly exposed admins only:
+
+    ./tg-osint --group @publicgroup --messages 500 --participants 100 --admins
+
+This mode does not join private/invite-only groups and does not bypass Telegram access controls. Participant lists are collected only when Telegram exposes them to the authenticated session. The report records what was observed, not a claim that the public group has been completely enumerated.
 
 ## Historical search
 
