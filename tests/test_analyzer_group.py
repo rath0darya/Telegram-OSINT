@@ -25,7 +25,7 @@ class GroupAnalyzerTests(unittest.TestCase):
         self.assertEqual(result["message_count"], 1)
         self.assertEqual(result["authored_message_count"], 0)
         self.assertEqual(result["iocs"]["urls"], ["https://example.com"])
-        self.assertIn("#test", result["hashtags"][0]["value"])
+        self.assertEqual(result["hashtags"][0]["value"], "test")
 
 
 if __name__ == "__main__":
