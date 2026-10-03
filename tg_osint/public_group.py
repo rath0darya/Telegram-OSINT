@@ -210,6 +210,13 @@ async def _collect_group(target: str | int, limit: int = 500, participant_limit:
                         "participant_type": participant_type,
                         "observation": "public_participant_list_exposed_by_telegram",
                         "admins_only": bool(admins_only),
+                        "membership": {
+                            "chat": group,
+                            "status": "observed_public_participant",
+                            "role": "admin" if admins_only else "member",
+                            "observed_via": "telegram_public_participant_list",
+                            "target_telegram_id": data.get("id"),
+                        },
                     }
                     ptext = str(payload)
                     out.append(Evidence(
